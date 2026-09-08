@@ -1,0 +1,9 @@
+{
+  "sample": "sample.img",
+  "children": {
+    "chunked.bin": {
+      "length": 1124,
+      "sha256": "0983bf0f96aadebee3a8195acf31d26de6d834776c6fa887535f55db34e029eb"
+    }
+  }
+}

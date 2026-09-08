@@ -1,0 +1,13 @@
+{
+  "sample": "sample.bin",
+  "children": {
+    "alpha": {
+      "length": 13,
+      "sha256": "711d4b8e2ac41206b62862bdc8d2a5d8f5e692e9b31aee40ae1ec63337feec16"
+    },
+    "beta": {
+      "length": 5,
+      "sha256": "5f4445f34ce57b0c20cc54820dd1a7d363a984a5d6fb3448ba83ad9f96ed81c6"
+    }
+  }
+}

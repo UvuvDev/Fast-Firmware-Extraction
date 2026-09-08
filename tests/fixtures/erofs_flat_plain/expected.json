@@ -1,0 +1,9 @@
+{
+  "sample": "sample.img",
+  "children": {
+    "bigfile.bin": {
+      "length": 700,
+      "sha256": "513df58dd095240caa52ac490c29836736d4ef0133b40ac7b7e249abf7ecf2f7"
+    }
+  }
+}

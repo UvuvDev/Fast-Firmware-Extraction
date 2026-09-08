@@ -1,0 +1,13 @@
+{
+  "sample": "sample.img",
+  "children": {
+    "vendor_ramdisk": {
+      "length": 260,
+      "sha256": "b5b6cfb821d8827d4f0187cad30e8a33a2ca10443bc471f15f92eea7317a0bcd"
+    },
+    "dtb": {
+      "length": 74,
+      "sha256": "34fb5b6a67ee45ae2fecd3b2714b16212fcccc18fffcf1dcdd35ecb4090c5ddd"
+    }
+  }
+}
