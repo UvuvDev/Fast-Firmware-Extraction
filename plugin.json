@@ -1,0 +1,32 @@
+{
+    "pluginmetadataversion": 2,
+    "name": "Pixel Firmware Formats",
+    "type": [
+        "core"
+    ],
+    "api": [
+        "python3"
+    ],
+    "description": "Container Browser support for Pixel/Tensor vendor firmware formats: FBPACK (bootloader/radio), ext4, Shannon baseband TOC, and Android self-extracting vendor blobs.",
+    "longdescription": "Adds Container Browser transforms for the firmware formats found in Pixel/Tensor vendor blobs that Binary Ninja's core does not already parse: FBPACK v1/v2 (Fastboot Package, used by bootloader.img/radio.img), ext4 (vendor.img/vendor_dlkm.img, including the boot-pad-less variant seen inside modem images), Samsung Shannon baseband TOC firmware (modem.bin), and the self-extracting shell-script wrapper used to distribute vendor blobs. Pure Python, no external tool or GPL dependency required.",
+    "license": {
+        "name": "MIT",
+        "text": "See LICENSE"
+    },
+    "platforms": [
+        "Darwin",
+        "Linux",
+        "Windows"
+    ],
+    "installinstructions": {
+        "Darwin": "no special instructions",
+        "Linux": "no special instructions",
+        "Windows": "no special instructions"
+    },
+    "dependencies": {
+        "pip": []
+    },
+    "version": "0.1.0",
+    "author": "Bradley Fernandez",
+    "minimumbinaryninjaversion": 3000
+}
