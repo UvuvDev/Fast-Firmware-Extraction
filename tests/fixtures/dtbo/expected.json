@@ -1,0 +1,13 @@
+{
+  "sample": "sample.img",
+  "children": {
+    "dt00": {
+      "length": 36,
+      "sha256": "64575fbababeaeefebe313e51eca8bc6b53c8c16c7d2b8c5f776a71edce9a745"
+    },
+    "dt01": {
+      "length": 52,
+      "sha256": "ea7ed2d91068dff06cb3839dd7366149865884ddf50e233051ec774e90d23fa0"
+    }
+  }
+}
