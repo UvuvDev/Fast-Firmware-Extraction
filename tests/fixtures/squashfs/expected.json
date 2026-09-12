@@ -1,0 +1,9 @@
+{
+  "sample": "sample.img",
+  "children": {
+    "hello.txt": {
+      "length": 32,
+      "sha256": "c33a8f240f2ddd90fb0541d09b6aa1ff25789fbfde2e4afaff4b423f73dfcc92"
+    }
+  }
+}
