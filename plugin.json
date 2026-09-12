@@ -1,14 +1,14 @@
 {
     "pluginmetadataversion": 2,
-    "name": "Pixel Firmware Formats",
+    "name": "EasyFirmwareOpening",
     "type": [
         "core"
     ],
     "api": [
         "python3"
     ],
-    "description": "Container Browser support for Pixel/Tensor vendor firmware formats: FBPACK (bootloader/radio), ext4, Shannon baseband TOC, and Android self-extracting vendor blobs.",
-    "longdescription": "Adds Container Browser transforms for the firmware formats found in Pixel/Tensor vendor blobs that Binary Ninja's core does not already parse: FBPACK v1/v2 (Fastboot Package, used by bootloader.img/radio.img), ext4 (vendor.img/vendor_dlkm.img, including the boot-pad-less variant seen inside modem images), Samsung Shannon baseband TOC firmware (modem.bin), and the self-extracting shell-script wrapper used to distribute vendor blobs. Pure Python, no external tool or GPL dependency required.",
+    "description": "Container Browser support for embedded/mobile firmware container formats — Pixel/Tensor vendor blobs (FBPACK, ext4, EROFS, Shannon baseband TOC, Android boot images) and beyond, built to scale to hundreds of formats with one small file each.",
+    "longdescription": "Adds Container Browser transforms for firmware container/filesystem formats that Binary Ninja's core does not already parse. Started with Pixel/Tensor vendor firmware (FBPACK v1/v2, ext4, EROFS, Samsung Shannon baseband TOC, Android boot/vendor_boot images, DTBO, Android Sparse Image, self-extracting vendor-blob shell wrappers) and is designed to grow into other embedded-firmware ecosystems (e.g. UBI/UBIFS/SquashFS-based router and IoT firmware) without touching existing formats — see PROPOSAL.md and docs/ADDING_A_FORMAT.md. Pure Python, no external tool or GPL dependency required.",
     "license": {
         "name": "MIT",
         "text": "See LICENSE"
