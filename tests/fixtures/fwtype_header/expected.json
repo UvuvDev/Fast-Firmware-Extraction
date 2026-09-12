@@ -1,0 +1,9 @@
+{
+  "sample": "sample.bin",
+  "children": {
+    "payload.bin": {
+      "length": 48,
+      "sha256": "2c3d9f793f8b732592e68e179f85ee114ae812b031e8796cc316e87718b3f158"
+    }
+  }
+}
