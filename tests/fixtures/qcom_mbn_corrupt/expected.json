@@ -1,0 +1,4 @@
+{
+  "sample": "sample.mbn",
+  "expect_failure": true
+}
