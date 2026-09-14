@@ -1,0 +1,17 @@
+{
+  "sample": "sample.mbn",
+  "children": {
+    "code": {
+      "length": 53,
+      "sha256": "9ebaf58228f98ada2350241c8d92312b1a61acc9f643f34cc8c36b7faef99a77"
+    },
+    "signature": {
+      "length": 22,
+      "sha256": "88ec8270c4e086f7ccc4511526d50800bfa6c645823743bb21668da5497e6133"
+    },
+    "cert_chain": {
+      "length": 23,
+      "sha256": "35ba42878ad92959c575d826614d769415121f6b2a980bc6d26519dc3f402cd2"
+    }
+  }
+}
