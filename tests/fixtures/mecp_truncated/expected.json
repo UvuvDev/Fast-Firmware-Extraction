@@ -1,0 +1,4 @@
+{
+    "sample": "sample.img",
+    "expect_failure": true
+}

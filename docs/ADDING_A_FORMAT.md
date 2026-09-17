@@ -180,3 +180,4 @@ and run `python3 -m venv .venv && .venv/bin/pip install pytest` once first.)
 - [ ] fixture added under `tests/fixtures/` — happy path plus at least
       one corrupt/truncated case
 - [ ] `./scripts/run_tests.sh` passes
+- [ ] Update README.md to add the format(s) you just added
