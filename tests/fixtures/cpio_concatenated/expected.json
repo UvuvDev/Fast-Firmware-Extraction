@@ -1,0 +1,29 @@
+{
+  "sample": "sample.bin",
+  "children": {
+    "etc/config": {
+      "length": 560,
+      "sha256": "8eace948b086533a1487f4fe6a28cec7663b3927ae9a8cb853d75541db5aecc0"
+    },
+    "empty": {
+      "length": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "alias": {
+      "length": 16,
+      "sha256": "97c33ce3e24ebc3ab48c49138f3e740831bf57dddc94a051d1258ee5fc407246"
+    },
+    "original": {
+      "length": 16,
+      "sha256": "97c33ce3e24ebc3ab48c49138f3e740831bf57dddc94a051d1258ee5fc407246"
+    },
+    "safe/config": {
+      "length": 12,
+      "sha256": "3537b758adaaf3d10abb5297b0c1cfb5186357feb0146363d06cd36ea3de76c2"
+    },
+    "later": {
+      "length": 11,
+      "sha256": "ad91a108cf009c7f0a19cdca877fb489735ec99b0e9bda04b0d05dccc5f1237a"
+    }
+  }
+}

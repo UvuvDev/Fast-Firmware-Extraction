@@ -1,0 +1,9 @@
+{
+  "sample": "sample.bin",
+  "children": {
+    "crc.bin": {
+      "length": 560,
+      "sha256": "8eace948b086533a1487f4fe6a28cec7663b3927ae9a8cb853d75541db5aecc0"
+    }
+  }
+}

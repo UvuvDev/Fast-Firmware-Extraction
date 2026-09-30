@@ -6,6 +6,7 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 
 - **FBPack** — Fastboot Package (FBPK) v1/v2
 - **AndroidBootImage** — Android Boot / Vendor Boot Image
+- **LegacyLz4Ramdisk** — legacy LZ4 Android ramdisk with a newc/CRC CPIO filesystem
 - **AndroidSparse** — Android Sparse Image
 - **AndroidSelfExtract** — Android self-extracting vendor blob
 - **Dtbo** — DTBO / DT Table Image

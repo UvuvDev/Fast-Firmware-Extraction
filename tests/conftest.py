@@ -1,6 +1,9 @@
+import importlib
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+repo_root = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(repo_root.parent))
 
-import easy_firmware_opening  # noqa: E402,F401  (module-level import registers every format's Transform)
+# Load by directory name, matching Binary Ninja's dynamic plugin loader.
+importlib.import_module(repo_root.name)
