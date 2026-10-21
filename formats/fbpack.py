@@ -35,6 +35,7 @@ from typing import Callable
 
 from ..common.binstruct import BinStruct, cstr
 from ..common.container_base import Entry, OffsetTableContainer
+from ..common.native import formats
 
 MAGIC = b"FBPK"
 _PARTITION_TABLE_TYPE = 0
@@ -116,4 +117,5 @@ class FBPack(OffsetTableContainer):
         return parser(data)
 
 
-FBPack.register()
+if not any(info["id"] == "fbpack" for info in formats()):
+    FBPack.register()
