@@ -26,7 +26,7 @@ def _load_library():
     library = ctypes.CDLL(str(path))
     library.ffe_abi_version.argtypes = []
     library.ffe_abi_version.restype = ctypes.c_uint32
-    if library.ffe_abi_version() != 3:
+    if library.ffe_abi_version() != 4:
         raise RuntimeError("unsupported firmware-unpack ABI; rebuild with cargo build --release")
     library.ffe_format_count.argtypes = []
     library.ffe_format_count.restype = ctypes.c_size_t
@@ -39,6 +39,8 @@ def _load_library():
     library.ffe_archive_open.restype = ctypes.c_int32
     library.ffe_archive_count.argtypes = [ctypes.c_void_p]
     library.ffe_archive_count.restype = ctypes.c_size_t
+    library.ffe_archive_flags.argtypes = [ctypes.c_void_p]
+    library.ffe_archive_flags.restype = ctypes.c_uint32
     library.ffe_archive_name.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.POINTER(ctypes.c_size_t)]
     library.ffe_archive_name.restype = ctypes.c_void_p
     library.ffe_archive_read.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.POINTER(ctypes.c_void_p),
@@ -94,6 +96,7 @@ class NativeArchive:
         self._lock = threading.RLock()
         self._finalizer = weakref.finalize(self, library.ffe_archive_close, handle)
         try:
+            self.is_stream = bool(library.ffe_archive_flags(handle) & 1)
             names = []
             for index in range(library.ffe_archive_count(handle)):
                 length = ctypes.c_size_t()

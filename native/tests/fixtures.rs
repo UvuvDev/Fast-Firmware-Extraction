@@ -6,15 +6,23 @@ use std::{collections::BTreeSet, fs, path::Path};
 
 fn check(archive: Archive, children: &Value, label: &str) {
     let children = children.as_object().expect("children must be an object");
+    let names = if archive.is_decoded_stream() {
+        vec![String::new()]
+    } else {
+        archive.names().to_vec()
+    };
     assert_eq!(
-        archive.names().iter().collect::<BTreeSet<_>>(),
+        names.iter().collect::<BTreeSet<_>>(),
         children.keys().collect(),
         "{label}"
     );
     for (name, info) in children {
-        let data = archive
-            .read_named(name)
-            .unwrap_or_else(|e| panic!("{label}/{name}: {e}"));
+        let data = (if archive.is_decoded_stream() {
+            archive.read(0)
+        } else {
+            archive.read_named(name)
+        })
+        .unwrap_or_else(|e| panic!("{label}/{name}: {e}"));
         assert_eq!(
             data.len() as u64,
             info["length"].as_u64().expect("length required"),
