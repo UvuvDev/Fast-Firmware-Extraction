@@ -19,7 +19,7 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 - **Erofs** — EROFS filesystem
 - **F2fs** — F2FS filesystem
 - **Squashfs** — SquashFS filesystem
-- **Ubi** — UBI flash image
+- **Ubi** — UBI flash image (Rust)
 - **NetgearChk** — NETGEAR CHK firmware wrapper (Rust)
 - **Trx** — Broadcom TRX v1/v2 partitions with CRC32 verification (Rust)
 - **LzmaAlone** — LZMA-alone compressed images (Rust)
@@ -121,3 +121,7 @@ BN_DISABLE_USER_PLUGINS=1 ./scripts/run_tests.sh -v --confcutdir=tests
 
 This isolates unrelated user plugins and keeps pytest from importing the
 hyphenated checkout directory as a Python package.
+
+UBI reorders logical eraseblocks and extracts named static/dynamic volumes.
+It uses the first layout-table copy and rejects missing/duplicate data LEBs;
+update recovery and UBI header/data CRC verification are not implemented.
