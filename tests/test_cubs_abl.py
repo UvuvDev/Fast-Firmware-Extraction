@@ -23,6 +23,8 @@ def test_real_cubs_abl_chain():
     assert detect(payload)['id'] == 'blfs'
     members = {entry['name']: entry for entry in report['members']}
     with open_archive(None, payload) as archive:
+        start = report['blfs_offset'] - report['payload_offset']
+        assert archive.embedded_range == (start, start + report['blfs_length'])
         assert set(archive.names) == set(members)
         for name, info in members.items():
             stored = archive.read(name)
@@ -38,7 +40,11 @@ def test_real_cubs_abl_chain():
     session.process()
     assert [child.filename for child in session.root_context.children] == ['payload.bin']
     executable = session.root_context.children[0]
-    resources = {child.filename: child for child in executable.children}
+    assert {child.filename for child in executable.children} == {'Image', 'Unpacked contents'}
+    image = executable.get_child('Image')
+    assert image.is_leaf and not image.transform_name
+    assert hashlib.sha256(bytes(image.input.read(0, image.input.length))).hexdigest() == report['payload_sha256']
+    resources = {child.filename: child for child in executable.get_child('Unpacked contents').children}
     assert set(resources) == set(members)
     for name, info in members.items():
         child = resources[name]

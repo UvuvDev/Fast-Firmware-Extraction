@@ -23,7 +23,9 @@ for name in ['apbl','apbl_resources','apbl_corrupt']:
     if name=='apbl_corrupt': raw=raw[:-1];expected['expect_failure']=True
     else:
         child={'length':len(payload),'sha256':hashlib.sha256(payload).hexdigest()}
-        if resources: child['children']=json.loads(path.with_name('expected.json').read_text())['children']
+        if resources:
+            child['children']=json.loads(path.with_name('expected.json').read_text())['children']
+            child['embedded_range']=[128,len(payload)]
         expected['children']={'payload.bin':child}
     out=ROOT/'tests/fixtures'/name
     out.mkdir(exist_ok=True)

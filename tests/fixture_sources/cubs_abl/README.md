@@ -25,7 +25,12 @@ extraction:
 
     target/release/firmware-unpack /path/to/abl /path/to/new-output
 
-The payload remains available as `payload.bin`; resources are under
+In Binary Ninja, `payload.bin` exposes `Image` (the complete unpacked AArch64
+image, directly openable for analysis) and `Unpacked contents` (the BLFS
+resources). `Image` has further unpacking disabled so it remains an analysis
+leaf. The test verifies its original payload hash and all resource hashes.
+
+In the CLI, the payload remains available as `payload.bin`; resources are under
 `payload.bin.unpacked/`, with each BMP in its LZ4 member's sibling `.unpacked`
 directory as `payload.bin`. Every archive directory has `.ffe-paths.tsv`.
 Only the observed APBL/BLFS layouts are supported. Payload hash verification
