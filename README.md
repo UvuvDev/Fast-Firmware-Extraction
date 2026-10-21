@@ -9,7 +9,7 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 - **AndroidSparse** — Android Sparse Image (Rust)
 - **AndroidSelfExtract** — Android self-extracting vendor blob (Rust)
 - **Dtbo** — DTBO / DT Table Image
-- **Qcdt** — Qualcomm Device Tree Table (QCDT)
+- **Qcdt** — Qualcomm Device Tree Table (QCDT v1/v2/v3, Rust)
 - **QcomMbn** — Qualcomm Legacy MBN Firmware Header
 - **ShannonTOC** — Samsung Shannon Baseband TOC
 - **UnisocMECP** — Unisoc CP memory-decoupling modem image
