@@ -1,0 +1,37 @@
+{
+  "cpio_version": "bsdcpio 3.5.3 - libarchive 3.7.4 zlib/1.2.12 liblzma/5.4.3 bz2lib/1.0.8",
+  "command": [
+    "cpio",
+    "-o",
+    "-H",
+    "newc"
+  ],
+  "file_list": [
+    "file1.txt",
+    "subdir/nested.bin",
+    "empty.bin"
+  ],
+  "inputs": {
+    "file1.txt": "87c224b3d553e765acaa94bccc088fb45e32a5dc87711fd9682157993d26f12a",
+    "subdir/nested.bin": "183ef956d566a0c90e95d258683751ae1c9162513b0103be2e877b02ef2f8d3a",
+    "empty.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "zeroed_field_offsets": [
+    6,
+    22,
+    30,
+    38,
+    46,
+    62,
+    70,
+    78,
+    86,
+    102
+  ],
+  "artifacts": {
+    "tests/fixtures/cpio_newc/sample.cpio": "bc33715384a9637a9c8a7c2e5322cec0e20467ee4a98aec7e1e641816dc80c2d",
+    "tests/fixtures/cpio_newc/expected.json": "ccf07d600ed0ebcb4ea368c7252ad63f2abafd1f842946710b4b2220be60409f",
+    "tests/fixtures/cpio_newc_corrupt/sample.cpio": "02c8b1d37a0f566cff2feb1f8c5360b425950595b54909d28c6516120fc0d7d8",
+    "tests/fixtures/cpio_newc_corrupt/expected.json": "9b0e30559217b07875b2de05ee7129c52a8134f3e6b7d744028e5c206f796b34"
+  }
+}
