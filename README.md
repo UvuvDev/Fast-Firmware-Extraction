@@ -30,6 +30,8 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 - **LzmaAlone** — LZMA-alone compressed images (Rust)
 - **UBootLegacyImage** — U-Boot legacy image (uImage), single and multi-file, CRC32-verified (Rust)
 - **UBootFit** — U-Boot Flattened Image Tree (FIT) devicetree images (Rust)
+- **CpioNewc** — CPIO "newc" (070701) archives, e.g. Linux initramfs (Rust)
+- **Cramfs** — CramFS filesystem, zlib-compressed (Rust)
 
 Add a new unpacker with **one Rust module under `native/src/formats/` plus
 fixtures**. Build discovery, Python registration, and recursive CLI dispatch
@@ -63,7 +65,7 @@ available without the library; Rust-only formats require the native build. A pre
 a Rust parse error is reported as a failure. Use the default Cargo target
 directory when building for the plugin. CHK, TRX and LZMA require the Rust
 library. Parsing/extraction runs in Rust; Python adapts Container Browser's
-discovery and file-selection protocol. All 26 current format modules have Rust
+discovery and file-selection protocol. All 28 current format modules have Rust
 implementations; legacy Python readers remain as fallbacks and parity references.
 
 The native build uses `backhand` (MIT/Apache-2.0) with XZ enabled, statically
@@ -188,3 +190,18 @@ FDT/overlay reader. A devicetree blob sharing the same magic but lacking an
 External-data FIT images, whose image data lives outside the devicetree
 blob instead of inline, are not supported. See
 [U-Boot fixture provenance](tests/fixture_sources/uboot/README.md).
+
+CpioNewc exposes every regular file in a "070701" stream as a byte range;
+cpio never compresses entries, so no decoder is needed. A leading "./" (from
+a `find .`-style archive) is stripped from member names. Directories,
+symlinks, device nodes, and hardlink bookkeeping are not represented as
+members, and the "070702" CRC variant is unsupported. See
+[CPIO fixture provenance](tests/fixture_sources/cpio_newc/README.md).
+
+Cramfs walks the modern FSID_VERSION_2 superblock layout and decompresses
+each file's zlib-wrapped 4 KiB blocks on read, verifying each block's
+Adler-32 trailer. A zero-length block is treated as a hole (zero bytes)
+regardless of the advisory HOLES flag; any other flag bit, including the
+legacy pre-FSID_VERSION_2 superblock, SHIFTED_ROOT_OFFSET, or
+WRONG_SIGNATURE, is rejected rather than guessed at. See
+[CramFS fixture provenance](tests/fixture_sources/cramfs/README.md).
