@@ -14,7 +14,7 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 - **ShannonTOC** — Samsung Shannon Baseband TOC (Rust)
 - **UnisocMECP** — Unisoc CP memory-decoupling modem image
 - **FwTypeHeader** — Vendor fw-type Header
-- **Gpt** — GUID Partition Table (GPT)
+- **Gpt** — GUID Partition Table (512-byte sectors, Rust)
 - **Ext4** — ext4 filesystem
 - **Erofs** — EROFS filesystem
 - **F2fs** — F2FS filesystem
@@ -82,6 +82,10 @@ Boot v0–v4 and vendor boot v3/v4 extract kernel/ramdisk, legacy second-stage
 and DTBO/DTB segments, v4 signature bytes, fragmented vendor ramdisks, and
 bootconfig in memory. Fixtures use the official AOSP producer; see
 [boot fixture provenance](tests/fixture_sources/boot/README.md).
+
+GPT currently uses 512-byte logical sectors and checks both header and
+partition-array CRC32s. Extended header/entry sizes and UTF-16LE partition
+names are supported; backup-table recovery and 4 KiB sectors are not yet implemented.
 
 Self-extracting vendor wrappers scan at most 1 MiB for the `tail -n +N $0 | tar`
 marker and expose the remaining bytes as `payload.gz`. Scripts are never run.

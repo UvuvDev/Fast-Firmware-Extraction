@@ -71,6 +71,7 @@ import zlib
 
 from ..common.binstruct import BinStruct
 from ..common.container_base import Entry, OffsetTableContainer
+from ..common.native import formats
 
 MAGIC = b"EFI PART"
 
@@ -167,4 +168,5 @@ class Gpt(OffsetTableContainer):
         return entries
 
 
-Gpt.register()
+if not any(info["id"] == "gpt" for info in formats()):
+    Gpt.register()
