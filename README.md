@@ -28,6 +28,8 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 - **Blfs** — standalone/embedded BLFS v1 bootloader resource archives (Rust)
 - **Lz4Frame** — modern LZ4 frames, linked/independent blocks and checksums (Rust)
 - **LzmaAlone** — LZMA-alone compressed images (Rust)
+- **UBootLegacyImage** — U-Boot legacy image (uImage), single and multi-file, CRC32-verified (Rust)
+- **UBootFit** — U-Boot Flattened Image Tree (FIT) devicetree images (Rust)
 
 Add a new unpacker with **one Rust module under `native/src/formats/` plus
 fixtures**. Build discovery, Python registration, and recursive CLI dispatch
@@ -61,7 +63,7 @@ available without the library; Rust-only formats require the native build. A pre
 a Rust parse error is reported as a failure. Use the default Cargo target
 directory when building for the plugin. CHK, TRX and LZMA require the Rust
 library. Parsing/extraction runs in Rust; Python adapts Container Browser's
-discovery and file-selection protocol. All 24 current format modules have Rust
+discovery and file-selection protocol. All 26 current format modules have Rust
 implementations; legacy Python readers remain as fallbacks and parity references.
 
 The native build uses `backhand` (MIT/Apache-2.0) with XZ enabled, statically
@@ -169,3 +171,20 @@ the stored SHA-384 payload digest and exposes payload.bin; cryptographic signing
 metadata is not authenticated. The executable can then expose embedded BLFS
 resources, whose LZ4 streams decode automatically. See
 [Cubs ABL validation](tests/fixture_sources/cubs_abl/README.md).
+
+UBootLegacyImage verifies both the 64-byte header's CRC32 and the data CRC32
+(plain zlib CRC32, checked against real `mkimage`/`dumpimage` output) before
+exposing the payload. A multi-file image (kernel+initrd+dtb combined with
+`-T multi`) is split into `data00.bin`, `data01.bin`, ... using the embedded
+big-endian size table and its 4-byte inter-image padding; every other type is
+exposed as one named file (`kernel.bin`, `ramdisk.bin`, `fdt.bin`, ...).
+Compressed payloads (ih_comp != none) are returned as stored bytes; nested
+detection decodes any payload this crate otherwise recognizes.
+
+UBootFit walks a Flattened Image Tree's devicetree structure block far enough
+to read each `/images/*` subnode's `data` property, without being a general
+FDT/overlay reader. A devicetree blob sharing the same magic but lacking an
+`/images` node (an ordinary `.dtb`, say) is rejected rather than misreported.
+External-data FIT images, whose image data lives outside the devicetree
+blob instead of inline, are not supported. See
+[U-Boot fixture provenance](tests/fixture_sources/uboot/README.md).
