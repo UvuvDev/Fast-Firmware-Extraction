@@ -15,7 +15,7 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 - **UnisocMECP** — Unisoc CP memory-decoupling modem image (Rust)
 - **FwTypeHeader** — Vendor fw-type Header (Rust)
 - **Gpt** — GUID Partition Table (512-byte sectors, Rust)
-- **Ext4** — ext4 filesystem
+- **Ext4** — ext4 filesystem (Rust)
 - **Erofs** — EROFS filesystem
 - **F2fs** — F2FS filesystem
 - **Squashfs** — SquashFS filesystem
@@ -125,3 +125,8 @@ hyphenated checkout directory as a Python package.
 UBI reorders logical eraseblocks and extracts named static/dynamic volumes.
 It uses the first layout-table copy and rejects missing/duplicate data LEBs;
 update recovery and UBI header/data CRC verification are not implemented.
+
+Ext4 supports standard/padless superblocks, extent trees, direct through
+triple-indirect mappings, sparse/unwritten blocks, and small inline files.
+Inline directories/xattr overflow, journal replay, meta_bg, encryption, casefold,
+and checksum verification are outside the current implementation.

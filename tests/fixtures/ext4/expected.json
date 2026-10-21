@@ -5,5 +5,6 @@
       "length": 36,
       "sha256": "0a7132af620e062ae16a57d895ff8face508b6b7240283863a981139fca64c4f"
     }
-  }
+  },
+  "native_format": "ext4"
 }
