@@ -9,5 +9,6 @@
       "length": 5,
       "sha256": "5f4445f34ce57b0c20cc54820dd1a7d363a984a5d6fb3448ba83ad9f96ed81c6"
     }
-  }
+  },
+  "native_format": "fbpack"
 }
