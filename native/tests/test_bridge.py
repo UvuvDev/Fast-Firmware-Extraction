@@ -22,9 +22,9 @@ class NativeBridgeTests(unittest.TestCase):
             raise RuntimeError("build the native library with cargo build --release first")
 
     def check_children(self, archive, expected):
-        self.assertEqual(set(archive.names), set(expected))
+        self.assertEqual(set(("",) if archive.is_stream else archive.names), set(expected))
         for name, info in expected.items():
-            data = archive.read(name)
+            data = archive.read(archive.names[0] if archive.is_stream else name)
             self.assertEqual(len(data), info["length"], name)
             self.assertEqual(hashlib.sha256(data).hexdigest(), info["sha256"], name)
             if "children" in info:

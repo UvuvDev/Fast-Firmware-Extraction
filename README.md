@@ -6,7 +6,7 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 
 - **FBPack** — Fastboot Package (FBPK) v1/v2 (Rust)
 - **AndroidBootImage** — Android Boot / Vendor Boot Image
-- **AndroidSparse** — Android Sparse Image
+- **AndroidSparse** — Android Sparse Image (Rust)
 - **AndroidSelfExtract** — Android self-extracting vendor blob
 - **Dtbo** — DTBO / DT Table Image
 - **Qcdt** — Qualcomm Device Tree Table (QCDT)
@@ -31,7 +31,7 @@ are automatic. See [the contributor guide](docs/ADDING_A_FORMAT.md) and
 
 ## Rust unpacking
 
-The Rust core handles **FBPK v1/v2**, **DTBO / ACPIO** and the complete **NETGEAR R7000**
+The Rust core handles **FBPK v1/v2**, **Android sparse**, **DTBO / ACPIO** and the complete **NETGEAR R7000**
 chain: **CHK → TRX → LZMA kernel + SquashFS v4/XZ filesystem**. CHK/TRX
 parsers validate bounds, and TRX verifies CRC32. LZMA has dictionary and
 output limits; SquashFS exposes regular files and skips symlinks/specials.
@@ -49,7 +49,7 @@ cargo build --release --locked
 python3 -m unittest discover -s native/tests -v
 ```
 
-The Binary Ninja DTBO and SquashFS transforms automatically use the library in
+The Binary Ninja FBPK, sparse, DTBO, and SquashFS transforms use the library in
 `target/release/` after a plugin reload/restart. If the library is absent,
 the existing Python parser is used. A present but incompatible library or
 a Rust parse error is reported as a failure. Use the default Cargo target
@@ -76,6 +76,11 @@ Each archive directory contains `.ffe-paths.tsv`, mapping original paths to
 disk paths and nested directories. Case collisions receive suffixes. The
 output directory must be new. Use `--list-formats` to view the built registry.
 See [R7000 validation and fixture provenance](docs/R7000.md).
+
+Android sparse preserves the automatic decoded child in Container Browser.
+Its CLI output is `image.raw`. RAW, FILL, DONT_CARE, and CRC32 chunks are
+validated, including supplied checksums, before exposing output; expansion
+uses the common 512 MiB per-file limit.
 
 The DTBO Rust implementation extracts stored payload bytes and ignores v1
 compression flags; it does not decompress overlays. It validates every

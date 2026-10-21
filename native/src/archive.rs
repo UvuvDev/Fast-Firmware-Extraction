@@ -15,6 +15,10 @@ pub const MAX_MEMBERS: usize = 1_000_000;
 pub trait ArchiveReader {
     fn names(&self) -> &[String];
     fn read(&self, index: usize) -> Result<Vec<u8>>;
+    /// A decoded stream is one automatic child, rather than a selectable file.
+    fn is_decoded_stream(&self) -> bool {
+        false
+    }
 }
 
 pub struct Member {
@@ -26,6 +30,7 @@ pub struct RangeArchive {
     data: Vec<u8>,
     members: Vec<Member>,
     names: Vec<String>,
+    decoded_stream: bool,
 }
 impl RangeArchive {
     pub fn new(data: Vec<u8>, members: Vec<Member>) -> Result<Self> {
@@ -47,6 +52,7 @@ impl RangeArchive {
             data,
             members,
             names,
+            decoded_stream: false,
         })
     }
     pub fn single(name: &str, data: Vec<u8>) -> Result<Self> {
@@ -59,8 +65,16 @@ impl RangeArchive {
             }],
         )
     }
+    pub fn decoded_stream(name: &str, data: Vec<u8>) -> Result<Self> {
+        let mut archive = Self::single(name, data)?;
+        archive.decoded_stream = true;
+        Ok(archive)
+    }
 }
 impl ArchiveReader for RangeArchive {
+    fn is_decoded_stream(&self) -> bool {
+        self.decoded_stream
+    }
     fn names(&self) -> &[String] {
         &self.names
     }
@@ -105,6 +119,9 @@ impl Archive {
             return Err("firmware exceeds input size limit".into());
         }
         let reader = (format.open)(data)?;
+        if reader.is_decoded_stream() && reader.names().len() != 1 {
+            return Err("decoded stream must expose exactly one output".into());
+        }
         if reader.names().len() > MAX_MEMBERS {
             return Err("too many archive members".into());
         }
@@ -129,6 +146,9 @@ impl Archive {
     }
     pub fn names(&self) -> &[String] {
         self.reader.names()
+    }
+    pub fn is_decoded_stream(&self) -> bool {
+        self.reader.is_decoded_stream()
     }
     pub fn read(&self, index: usize) -> Result<Vec<u8>> {
         if index >= self.names().len() {

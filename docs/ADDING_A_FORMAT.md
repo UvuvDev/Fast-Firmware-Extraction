@@ -45,7 +45,10 @@ format. Broad signatures should be exceptional.
 in-memory session. It has no Binary Ninja, Python, CLI, or disk dependency.
 
 - Offset tables: return `RangeArchive::new(data, Vec<Member>)`.
-- One decoded stream: return `RangeArchive::single(name, decoded_bytes)`.
+- One selectable decoded file: return `RangeArchive::single(name, decoded_bytes)`.
+- One automatic decoded stream: return `RangeArchive::decoded_stream(name, bytes)`.
+  Binary Ninja exposes an unnamed child, preserving normal decode-transform
+  behavior; the CLI uses `name` for the output file.
 - Filesystems/custom layouts: implement `ArchiveReader::names` and `read`.
   Keep the index and any decompressor state in that reader.
 

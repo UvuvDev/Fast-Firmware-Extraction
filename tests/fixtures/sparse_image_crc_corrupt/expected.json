@@ -1,0 +1,5 @@
+{
+  "sample": "sample.img",
+  "native_format": "sparse_image",
+  "expect_failure": true
+}

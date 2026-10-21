@@ -1,7 +1,7 @@
 //! Format-neutral C ABI. All unsafe code stays in this module.
 #[unsafe(no_mangle)]
 pub extern "C" fn ffe_abi_version() -> u32 {
-    3
+    4
 }
 
 #[unsafe(no_mangle)]
@@ -138,6 +138,14 @@ pub unsafe extern "C" fn ffe_archive_open(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ffe_archive_count(handle: *const NativeArchive) -> usize {
     unsafe { handle.as_ref() }.map_or(0, |archive| archive.archive.names().len())
+}
+
+/// Generic reader flags: bit 0 means a single automatic decoded stream.
+/// # Safety
+/// Handle is null or a live handle returned by ffe_archive_open.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ffe_archive_flags(handle: *const NativeArchive) -> u32 {
+    unsafe { handle.as_ref() }.map_or(0, |archive| u32::from(archive.archive.is_decoded_stream()))
 }
 
 /// Return borrowed UTF-8 name bytes, valid until close. Null on invalid index.
