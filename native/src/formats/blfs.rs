@@ -1,8 +1,10 @@
 //! BLFS v1 resource tables, layout measured in the real Cubs spacecraft ABL
 //! through Binary Ninja MCP and independently extracted using record offsets.
 //! Only the observed 32-byte header / 64-byte entry layout is supported; both
-//! count fields must agree and reserved fields must be zero. No reference
+//! count fields must agree and header reserved fields must be zero. No reference
 //! implementation was copied. Recognizes standalone or bounded embedded tables.
+//! The final eight entry bytes are opaque metadata: ABL resources use zero,
+//! while Cubs DRAM tables use (0 or 0xffffffff, 4). They do not affect carving.
 use crate::archive::{ArchiveReader, MAX_FILE_SIZE, MAX_MEMBERS, Member, RangeArchive, Result};
 use crate::bytes::{get, le32};
 use crate::registry::{FormatDescriptor, PROBE_LIMIT, Signature};
@@ -56,9 +58,6 @@ fn open(data: Vec<u8>) -> Result<Box<dyn ArchiveReader>> {
     let archive = get(&data, base, total)?;
     let mut members = Vec::with_capacity(count);
     for record in get(archive, 32, count * 64)?.chunks_exact(64) {
-        if record[56..].iter().any(|&b| b != 0) {
-            return Err("unsupported BLFS entry flags/reserved fields".into());
-        }
         let name =
             String::from_utf8_lossy(record[..48].split(|&b| b == 0).next().unwrap()).into_owned();
         let size = le32(record, 48)? as usize;
@@ -122,11 +121,25 @@ mod tests {
         assert_eq!(archive.embedded_range(), Some(0..size));
     }
     #[test]
-    fn rejects_versions_counts_and_reserved_fields() {
-        for (offset, value) in [(4, 2), (8, u32::MAX), (12, 3), (20, 1), (32 + 56, 1)] {
+    fn rejects_versions_counts_and_header_reserved_fields() {
+        for (offset, value) in [(4, 2), (8, u32::MAX), (12, 3), (20, 1)] {
             let mut data = sample();
             put32(&mut data, offset, value);
             assert!(open(data).is_err());
+        }
+    }
+    #[test]
+    fn opaque_entry_metadata_does_not_change_member_bytes() {
+        let original = Archive::open_auto(sample()).unwrap();
+        let mut data = sample();
+        for (index, first) in [u32::MAX, 0].into_iter().enumerate() {
+            put32(&mut data, 32 + index * 64 + 56, first);
+            put32(&mut data, 32 + index * 64 + 60, 4);
+        }
+        let archive = Archive::open_auto(data).unwrap();
+        assert_eq!(archive.names(), original.names());
+        for name in original.names() {
+            assert_eq!(archive.read_named(name), original.read_named(name));
         }
     }
     #[test]
