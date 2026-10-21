@@ -4,6 +4,8 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 
 ## Supported formats
 
+- **AndroidBootImage** — Android Boot / Vendor Boot Image (Rust)
+
 Formats land one at a time, each as its own PR. Add a new unpacker with
 **one Rust module under `native/src/formats/` plus fixtures**. Build
 discovery, Python registration, and recursive CLI dispatch are automatic.
@@ -84,3 +86,8 @@ BN_DISABLE_USER_PLUGINS=1 ./scripts/run_tests.sh -v --confcutdir=tests
 
 This isolates unrelated user plugins and keeps pytest from importing the
 hyphenated checkout directory as a Python package.
+
+Boot v0–v4 and vendor boot v3/v4 extract kernel/ramdisk, legacy second-stage
+and DTBO/DTB segments, v4 signature bytes, fragmented vendor ramdisks, and
+bootconfig in memory. Fixtures use the official AOSP producer; see
+[boot fixture provenance](tests/fixture_sources/boot/README.md).

@@ -1,0 +1,26 @@
+{
+  "sample": "sample.bin",
+  "native_format": "fbpack",
+  "children": {
+    "boot.sparse": {
+      "length": 16424,
+      "sha256": "0c395234d093f7a6a844cdac7e9e3ae94c71f241b4a65f4c73780910da3b7275",
+      "children": {
+        "": {
+          "length": 16384,
+          "sha256": "d3aa947cd5f71e0ff6527de04cb05bd3455970969a3115c63eecab984e58bbda",
+          "children": {
+            "kernel": {
+              "length": 5117,
+              "sha256": "78e82407c4048d691f61423fecd64f84584d69073aa3b2a881ce920ff1f457e5"
+            },
+            "ramdisk": {
+              "length": 414,
+              "sha256": "7b14bc7413bbb4aacc0b0292145441fbd156a5903a358a86797c8ab0b02e182e"
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "sample": "sample.img",
+  "native_format": "boot_image",
+  "children": {
+    "vendor_ramdisk00": {
+      "length": 126,
+      "sha256": "ee693dbdba0738e9926a3ca702f770e918ab2d21cb7f11dd5b434ed1ff40460a"
+    },
+    "vendor_ramdisk01": {
+      "length": 198,
+      "sha256": "051c32af10b78346a61b66aad82e0fdda4e9d05a4deb4d125330cce9383ad6a2"
+    },
+    "bootconfig": {
+      "length": 22,
+      "sha256": "e4a60b959f24e0bad90e046aa572d98201f5a34d61492c3af5f8908e1be495ec"
+    },
+    "dtb": {
+      "length": 20,
+      "sha256": "f1862844e547760c5b29e68fe062471a3a4ce4e158b2661fca70f1edccf9a99b"
+    }
+  }
+}

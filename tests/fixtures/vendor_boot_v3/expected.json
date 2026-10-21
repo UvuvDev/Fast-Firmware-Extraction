@@ -9,5 +9,6 @@
       "length": 74,
       "sha256": "34fb5b6a67ee45ae2fecd3b2714b16212fcccc18fffcf1dcdd35ecb4090c5ddd"
     }
-  }
+  },
+  "native_format": "boot_image"
 }
