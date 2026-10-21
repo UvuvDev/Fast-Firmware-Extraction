@@ -55,6 +55,7 @@ from typing import Optional
 from binaryninja import log_error
 
 from ..common.container_base import FilesystemContainer
+from ..common.native import formats
 
 _EROFS_MAGIC = 0xE0F5E1E2
 _ROOT_MODE_CHECK_LEN = 0x60  # superblock bytes needed up through rootnid_2b/blocks_lo etc.
@@ -391,4 +392,5 @@ class Erofs(FilesystemContainer):
         return fs.read_file_content(inode)
 
 
-Erofs.register()
+if not any(info["id"] == "erofs" for info in formats()):
+    Erofs.register()
