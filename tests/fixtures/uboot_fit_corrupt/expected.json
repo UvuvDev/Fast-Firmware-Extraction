@@ -1,0 +1,5 @@
+{
+  "sample": "sample.itb",
+  "native_format": "uboot_fit",
+  "expect_failure": true
+}
