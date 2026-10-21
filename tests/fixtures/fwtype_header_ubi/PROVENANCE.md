@@ -1,0 +1,1 @@
+Synthetic wrapper: bytes 0..21, the literal fw-type:Cloud tag and newline, zero padding to offset 4096, then the existing ubi/sample.bin fixture verbatim. Expected payload length/SHA-256 are calculated from that input before wrapping. This wrapper does not claim a valid vendor integrity hash or official-tool provenance.

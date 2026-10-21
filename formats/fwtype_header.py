@@ -31,6 +31,7 @@ from __future__ import annotations
 from binaryninja import DataBuffer, TransformResult, log_error
 
 from ..common.container_base import ContainerTransform
+from ..common.native import formats
 
 _TAG = b"fw-type:"
 _TAG_SEARCH_LIMIT = 256  # the tag has been seen within the first ~30 bytes; generous margin
@@ -87,4 +88,5 @@ class FwTypeHeader(ContainerTransform):
         return True
 
 
-FwTypeHeader.register()
+if not any(info["id"] == "fwtype_header" for info in formats()):
+    FwTypeHeader.register()
