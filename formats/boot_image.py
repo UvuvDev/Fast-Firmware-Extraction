@@ -31,6 +31,7 @@ import tempfile
 from binaryninja import DataBuffer, TransformResult, log_error
 
 from ..common.container_base import ContainerTransform
+from ..common.native import formats
 from ..third_party.aosp_mkbootimg import unpack_bootimg as aosp
 
 _MAGICS = (b"ANDROID!", b"VNDRBOOT")
@@ -102,4 +103,5 @@ class BootImage(ContainerTransform):
         return complete
 
 
-BootImage.register()
+if not any(info["id"] == "boot_image" for info in formats()):
+    BootImage.register()
