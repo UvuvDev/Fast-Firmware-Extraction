@@ -34,6 +34,10 @@ def _load_library():
     library.ffe_format_info.restype = ctypes.c_void_p
     library.ffe_detect.argtypes = [ctypes.c_char_p, ctypes.c_size_t]
     library.ffe_detect.restype = ctypes.c_size_t
+    # Older ABI-4 builds predate this additive capability and use 64 KiB.
+    if hasattr(library, "ffe_probe_limit"):
+        library.ffe_probe_limit.argtypes = []
+        library.ffe_probe_limit.restype = ctypes.c_size_t
     library.ffe_archive_open.argtypes = [ctypes.c_char_p, ctypes.c_size_t, ctypes.c_char_p, ctypes.c_size_t,
                                        ctypes.POINTER(ctypes.c_void_p), ctypes.c_void_p, ctypes.c_size_t]
     library.ffe_archive_open.restype = ctypes.c_int32
@@ -77,11 +81,18 @@ def _inventory():
     return formats()
 
 
+def probe_limit() -> int:
+    library = _load_library()
+    if library is None or not hasattr(library, "ffe_probe_limit"):
+        return 65536
+    return library.ffe_probe_limit()
+
+
 def detect(data: bytes) -> dict[str, str] | None:
     library = _load_library()
     if library is None:
         return None
-    data = bytes(data[:65536])
+    data = bytes(data[:probe_limit()])
     index = library.ffe_detect(data, len(data))
     inventory = _inventory()
     return inventory[index] if index < len(inventory) else None

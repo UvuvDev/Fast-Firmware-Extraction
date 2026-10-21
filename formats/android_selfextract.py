@@ -28,6 +28,7 @@ import re
 from binaryninja import DataBuffer, TransformResult, log_error
 
 from ..common.container_base import ContainerTransform
+from ..common.native import formats
 
 _PREFIX_SCAN_LIMIT = 1 << 20  # generously more than any real license banner
 _MARKER = re.compile(rb"tail\s+-n\s+\+(\d+)\s+\$0\s*\|\s*tar", re.IGNORECASE)
@@ -85,4 +86,5 @@ class AndroidSelfExtract(ContainerTransform):
         return True
 
 
-AndroidSelfExtract.register()
+if not any(info["id"] == "android_selfextract" for info in formats()):
+    AndroidSelfExtract.register()

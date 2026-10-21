@@ -7,7 +7,7 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 - **FBPack** — Fastboot Package (FBPK) v1/v2 (Rust)
 - **AndroidBootImage** — Android Boot / Vendor Boot Image (Rust)
 - **AndroidSparse** — Android Sparse Image (Rust)
-- **AndroidSelfExtract** — Android self-extracting vendor blob
+- **AndroidSelfExtract** — Android self-extracting vendor blob (Rust)
 - **Dtbo** — DTBO / DT Table Image
 - **Qcdt** — Qualcomm Device Tree Table (QCDT)
 - **QcomMbn** — Qualcomm Legacy MBN Firmware Header
@@ -31,7 +31,7 @@ are automatic. See [the contributor guide](docs/ADDING_A_FORMAT.md) and
 
 ## Rust unpacking
 
-The Rust core handles **FBPK v1/v2**, **Android sparse**, **Android boot/vendor boot**, **DTBO / ACPIO** and the complete **NETGEAR R7000**
+The Rust core handles **FBPK v1/v2**, **Android sparse**, **Android boot/vendor boot**, **self-extracting vendor blobs**, **DTBO / ACPIO** and the complete **NETGEAR R7000**
 chain: **CHK → TRX → LZMA kernel + SquashFS v4/XZ filesystem**. CHK/TRX
 parsers validate bounds, and TRX verifies CRC32. LZMA has dictionary and
 output limits; SquashFS exposes regular files and skips symlinks/specials.
@@ -49,7 +49,7 @@ cargo build --release --locked
 python3 -m unittest discover -s native/tests -v
 ```
 
-The Binary Ninja FBPK, sparse, boot, DTBO, and SquashFS transforms use the library in
+The Binary Ninja FBPK, sparse, boot, self-extract, DTBO, and SquashFS transforms use the library in
 `target/release/` after a plugin reload/restart. If the library is absent,
 the existing Python parser is used. A present but incompatible library or
 a Rust parse error is reported as a failure. Use the default Cargo target
@@ -81,6 +81,11 @@ Boot v0–v4 and vendor boot v3/v4 extract kernel/ramdisk, legacy second-stage
 and DTBO/DTB segments, v4 signature bytes, fragmented vendor ramdisks, and
 bootconfig in memory. Fixtures use the official AOSP producer; see
 [boot fixture provenance](tests/fixture_sources/boot/README.md).
+
+Self-extracting vendor wrappers scan at most 1 MiB for the `tail -n +N $0 | tar`
+marker and expose the remaining bytes as `payload.gz`. Scripts are never run.
+Payload targets at or before the marker are rejected to prevent recursion;
+Python retains the legacy fallback when the Rust library is absent.
 
 Android sparse preserves the automatic decoded child in Container Browser.
 Its CLI output is `image.raw`. RAW, FILL, DONT_CARE, and CRC32 chunks are

@@ -32,8 +32,8 @@ pub const FORMAT: FormatDescriptor = FormatDescriptor {
 
 Signatures support nonzero offsets and alternatives. A format without fixed
 magic can use `Signature::byte_range` plus a discriminator in `probe` (see
-LZMA). Probes receive at most 64 KiB and must bound their own allocations and
-work. Detection indexes signatures by offset and first byte, tests only those
+LZMA). Probes receive at most 1 MiB and must bound their own allocations and
+work. Python queries the backend for its probe limit. Detection indexes signatures by offset and first byte, tests only those
 buckets, and invokes probes only for matching signatures. Longer exact
 signatures win; equal lengths resolve by stable ID. Use a discriminator for
 overlapping formats; a full parse failure propagates without trying another

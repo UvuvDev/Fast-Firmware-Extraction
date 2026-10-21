@@ -1,7 +1,7 @@
 """One adapter for all Rust formats, generated from the native inventory."""
 from binaryninja import DataBuffer, TransformCapabilities
 from .container_base import FilesystemContainer
-from .native import NativeArchive, detect, formats, open_archive
+from .native import NativeArchive, detect, formats, open_archive, probe_limit
 
 
 class NativeContainer(FilesystemContainer):
@@ -22,7 +22,7 @@ class NativeContainer(FilesystemContainer):
             return archive.read(archive.names[0]) if archive.is_stream else None
 
     def configure_child(self, child, path: str) -> None:
-        info = detect(child.input.read(0, min(child.input.length, 65536)))
+        info = detect(child.input.read(0, min(child.input.length, probe_limit())))
         if info:
             child.set_transform_name(info["name"])
 
@@ -45,7 +45,7 @@ class NativeDispatcher(NativeContainer):
     capabilities = FilesystemContainer.capabilities
 
     def can_decode(self, input) -> bool:
-        return detect(input.read(0, min(input.length, 65536))) is not None
+        return detect(input.read(0, min(input.length, probe_limit()))) is not None
 
 
 _registered = []

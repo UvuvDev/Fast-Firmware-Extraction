@@ -5,7 +5,7 @@ use std::{
     sync::OnceLock,
 };
 
-pub const PROBE_LIMIT: usize = 65536;
+pub const PROBE_LIMIT: usize = 1 << 20;
 
 /// Each signature is an alternative. Longer exact signatures win over broad
 /// byte ranges. Overlaps of equal specificity resolve by stable format ID.
