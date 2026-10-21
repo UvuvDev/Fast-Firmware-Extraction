@@ -79,9 +79,39 @@ def test_real_cubs_bootloader_targets():
             assert archive.read(archive.names[index]) == data[entry.offset:entry.offset + entry.size]
     session = TransformSession(filename)
     session.set_interactive(False)
-    session.process()
+    complete = session.process()
     assert session.root_context.transform_result != TransformResult.TransformFailure
     assert len(session.root_context.children) == 34
+    pending = [session.root_context]
+    failures = []
+    while pending:
+        context = pending.pop()
+        if (context.transform_result == TransformResult.TransformFailure
+                or context.extraction_result == TransformResult.TransformFailure):
+            failures.append((context.filename, context.transform_name, context.extraction_message))
+        pending.extend(context.children)
+    assert not failures, f"failed nested components: {failures}"
+    assert complete
+    dram_report = json.loads((Path(__file__).parent / "fixture_sources/cubs_blfs/provenance.json").read_text())
+    assert hashlib.sha256(data).hexdigest() == dram_report["sha256"]
+    for component in dram_report["components"]:
+        host = session.root_context.get_child(component["name"])
+        host_bytes = bytes(host.input.read(0, host.input.length))
+        assert hashlib.sha256(host_bytes).hexdigest() == component["sha256"]
+        image, contents = host.get_child("Image"), host.get_child("Unpacked contents")
+        assert image.is_leaf and not image.transform_name
+        assert bytes(image.input.read(0, image.input.length)) == host_bytes
+        assert len(contents.children) == component["member_count"]
+        with open_archive("blfs", host_bytes) as archive:
+            assert archive.embedded_range == (component["blfs_offset"],
+                                               component["blfs_offset"] + component["blfs_length"])
+            digest = hashlib.sha256()
+            for name in archive.names:
+                content = archive.read(name)
+                digest.update(name.encode() + b"\0" + len(content).to_bytes(8, "little") + content)
+                child = contents.get_child(name)
+                assert bytes(child.input.read(0, child.input.length)) == content
+            assert digest.hexdigest() == component["members_sha256"]
     abl = session.root_context.get_child("abl")
     report = json.loads((Path(__file__).parent / "fixture_sources/cubs_abl/provenance.json").read_text())
     assert hashlib.sha256(bytes(abl.input.read(0, abl.input.length))).hexdigest() == report["sha256"]
