@@ -14,6 +14,7 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 - **ShannonTOC** — Samsung Shannon Baseband TOC (Rust)
 - **UnisocMECP** — Unisoc CP memory-decoupling modem image (Rust)
 - **FwTypeHeader** — Vendor fw-type Header (Rust)
+- **SamsungPit** — Samsung PIT partition descriptors (Rust)
 - **Gpt** — GUID Partition Table (512-byte sectors, Rust)
 - **Ext4** — ext4 filesystem (Rust)
 - **Erofs** — EROFS filesystem (uncompressed, Rust)
@@ -135,3 +136,7 @@ EROFS handles flat files, inline tails, compact/extended inodes and single-devic
 chunk mappings. Compressed inodes, metabox, global 48BIT addressing, multiple
 devices and checksum verification remain unsupported. Filesystem readers expose
 regular files and skip symlinks and special nodes.
+
+Samsung PIT exposes each named partition's raw 132-byte descriptor. A standalone
+PIT contains no partition payloads; device geometry and obsolete file offsets
+are never used to carve imaginary contents.
