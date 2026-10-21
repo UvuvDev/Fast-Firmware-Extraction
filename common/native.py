@@ -45,6 +45,10 @@ def _load_library():
     library.ffe_archive_count.restype = ctypes.c_size_t
     library.ffe_archive_flags.argtypes = [ctypes.c_void_p]
     library.ffe_archive_flags.restype = ctypes.c_uint32
+    if hasattr(library, "ffe_archive_embedded_range"):
+        library.ffe_archive_embedded_range.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_size_t),
+                                                     ctypes.POINTER(ctypes.c_size_t)]
+        library.ffe_archive_embedded_range.restype = ctypes.c_int32
     if hasattr(library, "ffe_archive_diagnostics"):
         library.ffe_archive_diagnostics.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_size_t)]
         library.ffe_archive_diagnostics.restype = ctypes.c_void_p
@@ -111,6 +115,14 @@ class NativeArchive:
         self._finalizer = weakref.finalize(self, library.ffe_archive_close, handle)
         try:
             self.is_stream = bool(library.ffe_archive_flags(handle) & 1)
+            self.embedded_range = None
+            if hasattr(library, "ffe_archive_embedded_range"):
+                offset, length = ctypes.c_size_t(), ctypes.c_size_t()
+                status = library.ffe_archive_embedded_range(handle, ctypes.byref(offset), ctypes.byref(length))
+                if status < 0:
+                    raise ValueError("native archive returned invalid embedded extent")
+                if status:
+                    self.embedded_range = (offset.value, offset.value + length.value)
             self.diagnostics = ""
             if hasattr(library, "ffe_archive_diagnostics"):
                 length = ctypes.c_size_t()

@@ -77,9 +77,12 @@ fn open(data: Vec<u8>) -> Result<Box<dyn ArchiveReader>> {
     } else {
         format!("BLFS: embedded resource table at {base:#x}, {total:#x} bytes")
     };
-    Ok(Box::new(
-        RangeArchive::new(data, members)?.with_diagnostics(diagnostic),
-    ))
+    let embedded = base != 0 || total != data.len();
+    let mut reader = RangeArchive::new(data, members)?.with_diagnostics(diagnostic);
+    if embedded {
+        reader = reader.with_embedded_range(base..base + total);
+    }
+    Ok(Box::new(reader))
 }
 #[cfg(test)]
 mod tests {
@@ -99,7 +102,24 @@ mod tests {
         assert_eq!(registry::detect(&data).unwrap().id, "blfs");
         let archive = Archive::open_auto(data).unwrap();
         assert_eq!(archive.names().len(), 2);
+        assert_eq!(
+            archive.embedded_range(),
+            Some(0x180000..0x180000 + sample().len())
+        );
         assert!(archive.diagnostics().contains("0x180000"));
+    }
+    #[test]
+    fn standalone_and_trailing_host_data() {
+        let data = sample();
+        let size = data.len();
+        assert_eq!(
+            Archive::open_auto(data.clone()).unwrap().embedded_range(),
+            None
+        );
+        let mut host = data;
+        host.extend(b"host image suffix");
+        let archive = Archive::open_auto(host).unwrap();
+        assert_eq!(archive.embedded_range(), Some(0..size));
     }
     #[test]
     fn rejects_versions_counts_and_reserved_fields() {

@@ -110,7 +110,7 @@ class OffsetTableContainer(ContainerTransform):
 
 
 class FilesystemContainer(ContainerTransform):
-    def decode_without_selection(self, fs: Any, context) -> Optional[bool]:
+    def decode_without_selection(self, fs: Any, context, data: bytes) -> Optional[bool]:
         """A reader may expose an automatic decoded stream instead of files."""
         return None
 
@@ -136,7 +136,7 @@ class FilesystemContainer(ContainerTransform):
         # time becomes a measured problem on real multi-hundred-MB images.
         try:
             fs = self.open_filesystem(data)
-            stream_result = self.decode_without_selection(fs, context)
+            stream_result = self.decode_without_selection(fs, context, data)
             if stream_result is not None:
                 return stream_result
             paths = fs_paths = self.list_paths(fs)

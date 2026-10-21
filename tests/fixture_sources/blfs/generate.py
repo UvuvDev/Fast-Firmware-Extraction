@@ -21,6 +21,8 @@ for name,prefix in [('blfs',b''),('blfs_embedded',b'\x5f\x24\x03\xd5'+b'\xa5'*12
     raw=prefix+image
     expected={'native_format':'blfs','sample':'sample.blfs'}
     if name=='blfs_corrupt': raw=raw[:-1];expected['expect_failure']=True
-    else: expected['children']=children
+    else:
+        expected['children']=children
+        if prefix: expected['embedded_range']=[len(prefix),len(raw)]
     (out/'sample.blfs').write_bytes(raw)
     (out/'expected.json').write_text(json.dumps(expected,indent=2)+'\n')

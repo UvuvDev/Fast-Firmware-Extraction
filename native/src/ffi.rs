@@ -182,6 +182,43 @@ pub unsafe extern "C" fn ffe_archive_flags(handle: *const NativeArchive) -> u32 
     unsafe { handle.as_ref() }.map_or(0, |archive| u32::from(archive.archive.is_decoded_stream()))
 }
 
+/// Additive ABI capability: exact standalone archive extent in a host image.
+/// Returns 1 when embedded, 0 when not embedded (including a null handle), or
+/// -1 for invalid output pointers or a reader panic. Outputs are zeroed first.
+/// # Safety
+/// Handle is null or live; offset and length point to distinct writable usize
+/// values; handle access is serialized.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ffe_archive_embedded_range(
+    handle: *const NativeArchive,
+    offset: *mut usize,
+    length: *mut usize,
+) -> i32 {
+    if offset.is_null() || length.is_null() {
+        return -1;
+    }
+    unsafe {
+        *offset = 0;
+        *length = 0;
+    }
+    let Some(archive) = (unsafe { handle.as_ref() }) else {
+        return 0;
+    };
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        archive.archive.embedded_range()
+    })) {
+        Ok(Some(range)) => {
+            unsafe {
+                *offset = range.start;
+                *length = range.end - range.start;
+            }
+            1
+        }
+        Ok(None) => 0,
+        Err(_) => -1,
+    }
+}
+
 /// Return borrowed UTF-8 name bytes, valid until close. Null on invalid index.
 ///
 /// # Safety

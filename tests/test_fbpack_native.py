@@ -49,10 +49,16 @@ def test_fbpack_variant_selection_in_interactive_browser():
     payload = abl.get_child("payload.bin")
     assert payload.transform_name == "Blfs"
     session.process_from(payload)
-    assert set(payload.available_files) == {"Boot/test.bmp.lz4", "Fonts/test.txt"}
-    payload.set_requested_files(["Boot/test.bmp.lz4"])
-    session.process_from(payload)
-    image = payload.get_child("Boot/test.bmp.lz4")
+    assert {child.filename for child in payload.children} == {"Image", "Unpacked contents"}
+    retained = payload.get_child("Image")
+    assert retained.is_leaf and not retained.transform_name
+    assert bytes(retained.input.read(0, retained.input.length)) == bytes(payload.input.read(0, payload.input.length))
+    contents = payload.get_child("Unpacked contents")
+    session.process_from(contents)
+    assert set(contents.available_files) == {"Boot/test.bmp.lz4", "Fonts/test.txt"}
+    contents.set_requested_files(["Boot/test.bmp.lz4"])
+    session.process_from(contents)
+    image = contents.get_child("Boot/test.bmp.lz4")
     session.process_from(image)
     assert len(image.children) == 1
     decoded = image.children[0]
@@ -80,9 +86,13 @@ def test_real_cubs_bootloader_targets():
     report = json.loads((Path(__file__).parent / "fixture_sources/cubs_abl/provenance.json").read_text())
     assert hashlib.sha256(bytes(abl.input.read(0, abl.input.length))).hexdigest() == report["sha256"]
     payload = abl.get_child("payload.bin")
-    assert len(payload.children) == len(report["members"]) == 28
+    image = payload.get_child("Image")
+    assert image.is_leaf and not image.transform_name
+    assert hashlib.sha256(bytes(image.input.read(0, image.input.length))).hexdigest() == report["payload_sha256"]
+    contents = payload.get_child("Unpacked contents")
+    assert len(contents.children) == len(report["members"]) == 28
     for info in report["members"]:
-        child = payload.get_child(info["name"])
+        child = contents.get_child(info["name"])
         assert hashlib.sha256(bytes(child.input.read(0, child.input.length))).hexdigest() == info["stored_sha256"]
         if "decoded_sha256" in info:
             assert len(child.children) == 1

@@ -10,9 +10,18 @@ class NativeContainer(FilesystemContainer):
     # dispatcher detects all formats, avoiding N Python callbacks per input.
     capabilities = TransformCapabilities.TransformSupportsContext
 
-    def decode_without_selection(self, fs: NativeArchive, context):
-        if fs.diagnostics and (fs.is_stream or context.has_available_files):
+    def decode_without_selection(self, fs: NativeArchive, context, data: bytes):
+        if fs.diagnostics and (fs.is_stream or fs.embedded_range or context.has_available_files):
             log_info(fs.diagnostics)
+        if fs.embedded_range:
+            start, end = fs.embedded_range
+            image = context.create_child(DataBuffer(data), "Image")
+            # Keep the host directly openable. Auto-detection on these identical
+            # bytes would otherwise rediscover the archive indefinitely.
+            image.set_transform_name("")
+            contents = context.create_child(DataBuffer(data[start:end]), "Unpacked contents")
+            self.configure_child(contents, "Unpacked contents")
+            return True
         if not fs.is_stream:
             return None
         child = context.create_child(DataBuffer(fs.read(fs.names[0])), "")

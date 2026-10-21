@@ -19,6 +19,11 @@ pub trait ArchiveReader {
     fn is_decoded_stream(&self) -> bool {
         false
     }
+    /// Exact standalone archive extent inside a larger host image. Consumers
+    /// may retain the host for analysis alongside this archive's contents.
+    fn embedded_range(&self) -> Option<Range<usize>> {
+        None
+    }
     /// Optional human-readable analysis information, owned by this reader.
     fn diagnostics(&self) -> &str {
         ""
@@ -35,6 +40,7 @@ pub struct RangeArchive {
     members: Vec<Member>,
     names: Vec<String>,
     decoded_stream: bool,
+    embedded_range: Option<Range<usize>>,
     diagnostics: String,
 }
 impl RangeArchive {
@@ -58,6 +64,7 @@ impl RangeArchive {
             members,
             names,
             decoded_stream: false,
+            embedded_range: None,
             diagnostics: String::new(),
         })
     }
@@ -80,6 +87,10 @@ impl RangeArchive {
         self.diagnostics = diagnostics;
         self
     }
+    pub fn with_embedded_range(mut self, range: Range<usize>) -> Self {
+        self.embedded_range = Some(range);
+        self
+    }
 }
 impl ArchiveReader for RangeArchive {
     fn diagnostics(&self) -> &str {
@@ -87,6 +98,9 @@ impl ArchiveReader for RangeArchive {
     }
     fn is_decoded_stream(&self) -> bool {
         self.decoded_stream
+    }
+    fn embedded_range(&self) -> Option<Range<usize>> {
+        self.embedded_range.clone()
     }
     fn names(&self) -> &[String] {
         &self.names
@@ -131,7 +145,17 @@ impl Archive {
         if data.len() > MAX_INPUT_SIZE {
             return Err("firmware exceeds input size limit".into());
         }
+        let input_size = data.len();
         let reader = (format.open)(data)?;
+        if let Some(range) = reader.embedded_range()
+            && (reader.is_decoded_stream()
+                || range.start >= range.end
+                || range.end > input_size
+                || range.end - range.start > MAX_FILE_SIZE
+                || range == (0..input_size))
+        {
+            return Err("invalid embedded archive extent".into());
+        }
         if reader.is_decoded_stream() && reader.names().len() != 1 {
             return Err("decoded stream must expose exactly one output".into());
         }
@@ -163,6 +187,9 @@ impl Archive {
     pub fn is_decoded_stream(&self) -> bool {
         self.reader.is_decoded_stream()
     }
+    pub fn embedded_range(&self) -> Option<Range<usize>> {
+        self.reader.embedded_range()
+    }
     pub fn diagnostics(&self) -> &str {
         self.reader.diagnostics()
     }
@@ -178,5 +205,42 @@ impl Archive {
     }
     pub fn read_named(&self, name: &str) -> Result<Vec<u8>> {
         self.read(*self.indices.get(name).ok_or("file not found")?)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const LAYOUT: registry::FormatDescriptor = registry::FormatDescriptor {
+        id: "layout_test",
+        name: "LayoutTest",
+        description: "Reader contract validation",
+        signatures: &[],
+        probe: None,
+        open: |data| {
+            let range = data[0] as usize..data[1] as usize;
+            let reader = if data[2] == 0 {
+                RangeArchive::single("member", data)?
+            } else {
+                RangeArchive::decoded_stream("member", data)?
+            };
+            Ok(Box::new(reader.with_embedded_range(range)))
+        },
+    };
+
+    #[test]
+    fn embedded_extent_must_be_a_nonempty_proper_subrange() {
+        for (start, end, stream) in [(8, 7, 0), (0, 0, 0), (0, 11, 0), (0, 10, 0), (1, 9, 1)] {
+            let mut data = vec![0; 10];
+            data[..3].copy_from_slice(&[start, end, stream]);
+            assert!(Archive::open_format(&LAYOUT, data).is_err());
+        }
+        for (start, end) in [(1, 9), (0, 9), (1, 10)] {
+            let mut data = vec![0; 10];
+            data[..2].copy_from_slice(&[start, end]);
+            let archive = Archive::open_format(&LAYOUT, data).unwrap();
+            assert_eq!(archive.embedded_range(), Some(start as usize..end as usize));
+        }
     }
 }

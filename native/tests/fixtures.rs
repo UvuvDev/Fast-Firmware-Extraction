@@ -4,8 +4,18 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeSet, fs, path::Path};
 
-fn check(archive: Archive, children: &Value, label: &str) {
-    let children = children.as_object().expect("children must be an object");
+fn check(archive: Archive, expected: &Value, label: &str) {
+    let expected_range = expected["embedded_range"]
+        .as_array()
+        .map(|range| range[0].as_u64().unwrap() as usize..range[1].as_u64().unwrap() as usize);
+    assert_eq!(
+        archive.embedded_range(),
+        expected_range,
+        "{label}: embedded extent"
+    );
+    let children = expected["children"]
+        .as_object()
+        .expect("children must be an object");
     let names = if archive.is_decoded_stream() {
         vec![String::new()]
     } else {
@@ -36,7 +46,7 @@ fn check(archive: Archive, children: &Value, label: &str) {
         if info.get("children").is_some() {
             check(
                 Archive::open_auto(data).unwrap(),
-                &info["children"],
+                info,
                 &format!("{label}/{name}"),
             );
         }
@@ -77,11 +87,7 @@ fn all_native_fixtures() {
                 Some(id),
                 "{label}: detection"
             );
-            check(
-                Archive::open_auto(data).unwrap(),
-                &expected["children"],
-                &label,
-            );
+            check(Archive::open_auto(data).unwrap(), &expected, &label);
             covered.insert(id.to_string());
         }
     }
