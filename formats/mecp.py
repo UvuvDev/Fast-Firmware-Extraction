@@ -102,6 +102,7 @@ from binaryninja import log_info
 
 from ..common.binstruct import BinStruct, cstr
 from ..common.container_base import Entry, OffsetTableContainer
+from ..common.native import formats
 
 MAGIC = b"MECP"
 
@@ -303,4 +304,5 @@ class UnisocMECP(OffsetTableContainer):
         return super().perform_decode_with_context(context, params)
 
 
-UnisocMECP.register()
+if not any(info["id"] == "mecp" for info in formats()):
+    UnisocMECP.register()
