@@ -1,0 +1,18 @@
+{
+  "native_format": "f2fs",
+  "sample": "sample.img",
+  "children": {
+    "direct-node.bin": {
+      "length": 3784741,
+      "sha256": "104b8512ca949b5791cb8fa2e8d4b73541bd37f163b73e911517878c4383e812"
+    },
+    "indirect-node.bin": {
+      "length": 12120161,
+      "sha256": "72494e6f214ac2f29cbf03685460b2609a39178d6e27b46ec9847cb16174f46b"
+    },
+    "inline.txt": {
+      "length": 38,
+      "sha256": "68fc018055fead9e2750dfcfaf05031749b33460871d5e71d6f70bccf2ed973f"
+    }
+  }
+}

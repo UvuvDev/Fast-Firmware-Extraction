@@ -8,7 +8,7 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 - **AndroidBootImage** — Android Boot / Vendor Boot Image (Rust)
 - **AndroidSparse** — Android Sparse Image (Rust)
 - **AndroidSelfExtract** — Android self-extracting vendor blob (Rust)
-- **Dtbo** — DTBO / DT Table Image
+- **Dtbo** — DTBO / DT Table Image (Rust)
 - **Qcdt** — Qualcomm Device Tree Table (QCDT v1/v2/v3, Rust)
 - **QcomMbn** — Qualcomm Legacy MBN Firmware Header (Rust)
 - **ShannonTOC** — Samsung Shannon Baseband TOC (Rust)
@@ -18,8 +18,8 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 - **Gpt** — GUID Partition Table (512-byte sectors, Rust)
 - **Ext4** — ext4 filesystem (Rust)
 - **Erofs** — EROFS filesystem (uncompressed, Rust)
-- **F2fs** — F2FS filesystem
-- **Squashfs** — SquashFS filesystem
+- **F2fs** — F2FS static-NAT filesystem, 4 KiB (Rust)
+- **Squashfs** — SquashFS filesystem (Rust)
 - **Ubifs** — UBIFS committed filesystem, none/raw DEFLATE (Rust)
 - **Ubi** — UBI flash image (Rust)
 - **NetgearChk** — NETGEAR CHK firmware wrapper (Rust)
@@ -58,7 +58,8 @@ the existing Python parser is used. A present but incompatible library or
 a Rust parse error is reported as a failure. Use the default Cargo target
 directory when building for the plugin. CHK, TRX and LZMA require the Rust
 library. Parsing/extraction runs in Rust; Python adapts Container Browser's
-discovery and file-selection protocol. Other unpackers remain Python.
+discovery and file-selection protocol. All 21 current format modules have Rust
+implementations; legacy Python readers remain as fallbacks and parity references.
 
 The native build uses `backhand` (MIT/Apache-2.0) with XZ enabled, statically
 links liblzma, and uses `lzma-rust2` (Apache-2.0). No external extraction
@@ -146,3 +147,9 @@ UBIFS checks node CRCs and reconstructs the committed index with uncompressed
 or raw DEFLATE data. Dirty/diverging masters, journal replay, authentication,
 LZO and ZSTD are unsupported. DEFLATE uses pure Rust `miniz_oxide`; each data
 node expands to at most 4 KiB. UBI volumes chain into UBIFS automatically.
+
+F2FS handles 4 KiB blocks, checkpoint pack/version selection, NAT copy selection,
+inline files/directories, extra attributes, sparse data and indirect node tiers.
+It reads static NAT entries only: inline xattrs, compression/encryption,
+checkpoint-payload overflow, NAT journal/roll-forward replay and checksums are
+unsupported. F2FS/UBIFS validation uses synthetic fixtures, not device images.

@@ -18,9 +18,8 @@ kernel mainline source** (all GPL-2.0), fetched from
   - `fs/f2fs/node.h` — `current_nat_addr()` (the NAT double-buffering
     formula) and `NAT_BLOCK_OFFSET()`.
   - `fs/f2fs/f2fs.h` — `BLKS_PER_SEG()`.
-  - `fs/f2fs/inode.c` — confirms `i_inline_xattr_size` is read/stored
-    as-is (no documented ÷4 word conversion visible from this file alone;
-    see the inline-xattr limitation below).
+  - `fs/f2fs/inode.c` — confirms storage of `i_inline_xattr_size`; the
+    v6.12 on-disk header documents its four-byte slot unit.
 
 Cross-checked against two independent, separately-licensed
 reimplementations for the handful of facts the kernel excerpts above
@@ -29,8 +28,8 @@ vendored or copied):
 
   - `jaegeuk/f2fs-tools` (`lib/libf2fs.c`) — confirmed `f2fs_test_bit()`'s
     exact bit order: MSB-first within each byte (`mask = 1 << (7 - (nr &
-    7))`), used here for both the NAT version bitmap and every dentry
-    bitmap.
+    7))`), used for the NAT version bitmap. Directory bitmaps instead use
+    LSB-first order, confirmed by Linux v6.12 fs/f2fs/dir.c.
   - `cgsecurity/testdisk` (`src/f2fs_fs.h`) and the Linux `uapi/linux/
     magic.h` — both independently confirm `F2FS_SUPER_MAGIC = 0xF2F52010`.
 
@@ -54,24 +53,11 @@ guessing):
    crash or (worse) silently return garbage, so this is a hard,
    deliberate limitation, not an oversight.
 2. **Inline extended attributes** (``i_inline & F2FS_INLINE_XATTR``).
-   When set, the kernel additionally reserves ``i_inline_xattr_size``
-   words at the *front* of the direct-block-address region (right after
-   any extra-attribute fields), shrinking the usable direct-address
-   count by that much. The kernel source available for this task
-   confirmed *that* the field exists and is stored without an
-   documented unit conversion in `inode.c`, but not the exact
-   `get_inline_xattr_addrs()` accessor body that turns it into an
-   address-slot count (word vs. byte units) — and this is exactly the
-   kind of "off-by-a-multiplier" mistake that produces silently
-   misaligned block addresses rather than a crash. Rather than guess,
-   any inode with this bit set raises `NotImplementedError`.
-   **This is the single biggest real-world limitation**: real
-   Android-built F2FS images almost universally set `F2FS_INLINE_XATTR`
-   on *every* inode, because the SELinux security label is stored as an
-   inline xattr and `mkfs.f2fs` enables inline_xattr by default — so a
-   real captured `userdata`/`metadata` partition will likely raise this
-   for most or all of its files. Only images/inodes built without inline
-   xattrs (as this plugin's own synthetic fixtures are) are handled.
+   They reserve trailing direct-address slots; the field's unit is four
+   bytes per slot (Linux v6.12 f2fs_fs.h). This reader's supported subset
+   excludes these layouts, so such inodes raise ``NotImplementedError``.
+   Real Android images commonly use inline xattrs for SELinux labels and
+   will therefore be rejected rather than misread.
 3. **Checkpoint payload overflow** (superblock `cp_payload != 0`). When
    the SIT/NAT version bitmaps are too large to fit in the checkpoint's
    own block, F2FS spills them into `cp_payload` extra blocks with a
@@ -81,13 +67,10 @@ guessing):
    raises `NotImplementedError`.
 4. **NAT/SIT journal** (the small in-checkpoint cache of very recent,
    not-yet-flushed NAT/SIT updates). This extractor reads only the
-   static NAT area — reasonable for a not-actively-mounted, cleanly
-   unmounted captured image (the common case for firmware/partition
-   dumps), but if an image was captured mid-write with a dirty journal,
-   a handful of very recently touched inodes could resolve to stale node
-   blocks. This is a deliberate, documented assumption, not a bug fix
-   waiting to happen — see `docs/ADDING_A_FORMAT.md`'s guidance on
-   exactly this tradeoff.
+   static NAT area. Journal entries may override those entries even in
+   a stable checkpoint, so this is a limited static-NAT view rather than
+   a complete recovery implementation. It has only synthetic coverage;
+   real-device compatibility is not established.
 5. **The SIT (Segment Information Table) itself is never parsed.** It
    tracks segment/block *validity* for the allocator and garbage
    collector; a read-only extractor that only follows already-committed
@@ -122,11 +105,10 @@ node blocks (the two "direct node" pointers, the two "indirect node"
 pointers, and the one "double indirect node" pointer, each ported
 generically via one recursive walk — see `_walk_data`) are implemented,
 matching this task's "direct + at least single-indirect" minimum. The
-synthetic fixtures below exercise direct multi-block addressing but not
-the indirect/double-indirect node tiers (that would need a multi-MB
-file, which conflicts with keeping fixtures small) — that code path is
-implemented per the verified spec but is untested by fixture; flagging
-this rather than implying broader test coverage than actually exists.
+synthetic fixtures exercise direct multi-block and direct/indirect node tiers.
+The native port also tests double-indirect subtree traversal without allocating
+files beyond the common 512 MiB extraction limit. Fixtures remain synthetic;
+no formatter-generated or hardware image has been validated.
 """
 
 from __future__ import annotations
@@ -138,6 +120,7 @@ from typing import Optional
 from binaryninja import log_error
 
 from ..common.container_base import FilesystemContainer
+from ..common.native import formats
 
 # --- Superblock -------------------------------------------------------
 
@@ -189,8 +172,7 @@ def _def_addrs_per_inode(block_size: int) -> int:
 
 
 def _test_bit(bitmap: bytes, nr: int) -> bool:
-    """f2fs_test_bit: MSB-first within each byte (verified against
-    jaegeuk/f2fs-tools' lib/libf2fs.c)."""
+    """NAT version bit: MSB-first (directory entries use LSB-first)."""
     byte_idx = nr >> 3
     if byte_idx < 0 or byte_idx >= len(bitmap):
         return False
@@ -490,7 +472,7 @@ class F2fsFS:
         entries = []
         i = 0
         while i < nr:
-            if not _test_bit(bitmap, i):
+            if not (bitmap[i >> 3] & (1 << (i & 7))):
                 i += 1
                 continue
             doff = dentry_off + i * _SIZE_OF_DIR_ENTRY
@@ -594,4 +576,5 @@ class F2fs(FilesystemContainer):
         return fs.read_file_content(inode)
 
 
-F2fs.register()
+if not any(info["id"] == "f2fs" for info in formats()):
+    F2fs.register()

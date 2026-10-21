@@ -13,5 +13,6 @@
       "length": 21,
       "sha256": "9f78288914933dfcade6a92fd3a3162c4728c7ddd035ed496e0bc4dab12b6972"
     }
-  }
+  },
+  "native_format": "f2fs"
 }
