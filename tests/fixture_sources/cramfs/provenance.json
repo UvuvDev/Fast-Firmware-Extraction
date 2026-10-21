@@ -1,0 +1,29 @@
+{
+  "docker_image": "alpine:latest",
+  "cramfs_package_version": "cramfs-1.1-r7",
+  "commands": [
+    [
+      "mkcramfs",
+      "root",
+      "out.cramfs"
+    ],
+    [
+      "cramfsck",
+      "-v",
+      "out.cramfs"
+    ]
+  ],
+  "inputs": {
+    "small.txt": "90c1ada3b6cc6b753b39245c7070a91b58f6477ba82ff1248edf2f6fd52c09ff",
+    "subdir/nested.txt": "137e1f7fccb1b84c7ce499662bf3621830721d967c068d4dc6f4f8ee1e18e262",
+    "big.bin": "22e37e9bb9b9fd03be26bed2ddce04e3db6f01d0370ba63756145e9fbe00a7c5",
+    "empty.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "corrupt_field": "superblock size (offset 4), set to len(image) + 1_000_000",
+  "artifacts": {
+    "tests/fixtures/cramfs/sample.img": "eb51b829290a15e1bcfc2c5d778beafe66a46061d6d4f537d3df9b2ed3587c77",
+    "tests/fixtures/cramfs/expected.json": "b08e2b5019299ecba5596024f865a0b3310e19e1fab4bd1ea350bb01ac0a16a8",
+    "tests/fixtures/cramfs_corrupt/sample.img": "1342ecfc55fb0f31bb815b1156ac14449f6dde924c1f168374135adb7f410e6c",
+    "tests/fixtures/cramfs_corrupt/expected.json": "af33022f27053404b993cfe127e4f4cd3fda068b7e279eacde1f7defc5ee361a"
+  }
+}
