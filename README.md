@@ -4,6 +4,8 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 
 ## Supported formats
 
+- **AndroidSelfExtract** — Android self-extracting vendor blob (Rust)
+
 Formats land one at a time, each as its own PR. Add a new unpacker with
 **one Rust module under `native/src/formats/` plus fixtures**. Build
 discovery, Python registration, and recursive CLI dispatch are automatic.
@@ -84,3 +86,8 @@ BN_DISABLE_USER_PLUGINS=1 ./scripts/run_tests.sh -v --confcutdir=tests
 
 This isolates unrelated user plugins and keeps pytest from importing the
 hyphenated checkout directory as a Python package.
+
+Self-extracting vendor wrappers scan at most 1 MiB for the `tail -n +N $0 | tar`
+marker and expose the remaining bytes as `payload.gz`. Scripts are never run.
+Payload targets at or before the marker are rejected to prevent recursion;
+Python retains the legacy fallback when the Rust library is absent.
