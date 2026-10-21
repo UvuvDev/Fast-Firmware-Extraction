@@ -24,6 +24,7 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 - **Ubi** — UBI flash image (Rust)
 - **NetgearChk** — NETGEAR CHK firmware wrapper (Rust)
 - **Trx** — Broadcom TRX v1/v2 partitions with CRC32 verification (Rust)
+- **Blfs** — standalone/embedded BLFS v1 bootloader resource archives (Rust)
 - **Lz4Frame** — modern LZ4 frames, linked/independent blocks and checksums (Rust)
 - **LzmaAlone** — LZMA-alone compressed images (Rust)
 
@@ -59,7 +60,7 @@ the existing Python parser is used. A present but incompatible library or
 a Rust parse error is reported as a failure. Use the default Cargo target
 directory when building for the plugin. CHK, TRX and LZMA require the Rust
 library. Parsing/extraction runs in Rust; Python adapts Container Browser's
-discovery and file-selection protocol. All 22 current format modules have Rust
+discovery and file-selection protocol. All 23 current format modules have Rust
 implementations; legacy Python readers remain as fallbacks and parity references.
 
 The native build uses `backhand` (MIT/Apache-2.0) with XZ enabled, statically
@@ -154,3 +155,8 @@ inline files/directories, extra attributes, sparse data and indirect node tiers.
 It reads static NAT entries only: inline xattrs, compression/encryption,
 checkpoint-payload overflow, NAT journal/roll-forward replay and checksums are
 unsupported. F2FS/UBIFS validation uses synthetic fixtures, not device images.
+
+BLFS detects a standalone table or one embedded within the first 4 MiB of an
+executable. It preserves member names and stored bytes; LZ4 members recursively
+decode through the normal registry. The v1 layout is verified against the real
+Cubs spacecraft ABL image and independent extraction of all 28 resource files.

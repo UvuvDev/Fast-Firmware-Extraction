@@ -1,17 +1,20 @@
 //! Generated inventory plus an indexed, bounded detection path.
 use crate::archive::{ArchiveReader, Result};
+use aho_corasick::AhoCorasick;
 use std::{
-    collections::{BTreeSet, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     sync::OnceLock,
 };
 
-pub const PROBE_LIMIT: usize = 1 << 20;
+pub const PROBE_LIMIT: usize = 4 << 20;
+const MAX_EMBEDDED_MATCHES: usize = 65536;
 
 /// Each signature is an alternative. Longer exact signatures win over broad
 /// byte ranges. Overlaps of equal specificity resolve by stable format ID.
 pub struct Signature {
     pub offset: usize,
     bytes: &'static [u8],
+    search: bool,
     first: u8,
     last: u8,
 }
@@ -20,6 +23,7 @@ impl Signature {
         Self {
             offset,
             bytes,
+            search: false,
             first: 0,
             last: 0,
         }
@@ -28,8 +32,20 @@ impl Signature {
         Self {
             offset,
             bytes: &[],
+            search: false,
             first,
             last,
+        }
+    }
+    /// Opt in to bounded embedded detection, after all anchored formats fail.
+    /// Use a format probe to reject incidental magic constants/text in code.
+    pub const fn embedded(bytes: &'static [u8]) -> Self {
+        Self {
+            offset: 0,
+            bytes,
+            search: true,
+            first: 0,
+            last: 0,
         }
     }
     fn matches(&self, data: &[u8]) -> bool {
@@ -64,6 +80,8 @@ struct Index<'a> {
     ids: HashMap<&'a str, usize>,
     buckets: HashMap<(usize, u8), Vec<(usize, usize)>>,
     offsets: Vec<usize>,
+    embedded: Option<AhoCorasick>,
+    embedded_ids: Vec<Vec<usize>>,
 }
 impl<'a> Index<'a> {
     fn new(formats: &'a [FormatDescriptor]) -> Self {
@@ -71,6 +89,7 @@ impl<'a> Index<'a> {
         let mut names = HashSet::new();
         let mut buckets: HashMap<_, Vec<_>> = HashMap::new();
         let mut offsets = BTreeSet::new();
+        let mut embedded = BTreeMap::<&'static [u8], Vec<usize>>::new();
         for (i, format) in formats.iter().enumerate() {
             assert!(
                 !format.id.is_empty()
@@ -95,6 +114,18 @@ impl<'a> Index<'a> {
                 "format needs a detection signature"
             );
             for (s, signature) in format.signatures.iter().enumerate() {
+                if signature.search {
+                    assert!(
+                        signature.bytes.len() >= 4 && signature.bytes.len() <= PROBE_LIMIT,
+                        "embedded signatures must be exact and at least four bytes"
+                    );
+                    let ids = embedded.entry(signature.bytes).or_default();
+                    if ids.last() != Some(&i) {
+                        ids.push(i);
+                    }
+                    continue;
+                }
+
                 assert!(
                     signature
                         .offset
@@ -116,7 +147,14 @@ impl<'a> Index<'a> {
                 }
             }
         }
+        let automaton = if embedded.is_empty() {
+            None
+        } else {
+            Some(AhoCorasick::new(embedded.keys()).expect("invalid embedded signature automaton"))
+        };
         Self {
+            embedded: automaton,
+            embedded_ids: embedded.into_values().collect(),
             formats,
             ids,
             buckets,
@@ -142,6 +180,32 @@ impl<'a> Index<'a> {
                 }
             }
         }
+        let attempted: HashSet<_> = candidates.keys().copied().collect();
+        if let Some(format) = self.select(candidates, data) {
+            return Some(format);
+        }
+        let automaton = self.embedded.as_ref()?;
+        let mut candidates: HashMap<usize, usize> = HashMap::new();
+        for (count, found) in automaton.find_overlapping_iter(data).enumerate() {
+            if count >= MAX_EMBEDDED_MATCHES {
+                return None;
+            }
+            for &id in &self.embedded_ids[found.pattern().as_usize()] {
+                if !attempted.contains(&id) {
+                    candidates
+                        .entry(id)
+                        .and_modify(|score| *score = (*score).max(found.len()))
+                        .or_insert(found.len());
+                }
+            }
+        }
+        self.select(candidates, data)
+    }
+    fn select(
+        &self,
+        candidates: HashMap<usize, usize>,
+        data: &[u8],
+    ) -> Option<&'a FormatDescriptor> {
         let mut candidates: Vec<_> = candidates.into_iter().collect();
         candidates.sort_unstable_by(|(a, sa), (b, sb)| {
             sb.cmp(sa)
@@ -212,6 +276,88 @@ mod tests {
         assert_eq!(CALLS.load(Ordering::Relaxed), 1);
     }
 
+    #[test]
+    fn thousand_embedded_formats_share_one_scan() {
+        static EMBEDDED_CALLS: AtomicUsize = AtomicUsize::new(0);
+        fn embedded_probe(_: &[u8]) -> bool {
+            EMBEDDED_CALLS.fetch_add(1, Ordering::Relaxed);
+            true
+        }
+        let mut formats = Vec::new();
+        for i in 0_u16..1000 {
+            let id = Box::leak(format!("embedded_{i:04}").into_boxed_str());
+            let bytes =
+                Box::leak(vec![b'E', b'M', b'B', (i >> 8) as u8, i as u8].into_boxed_slice());
+            let signatures = Box::leak(vec![Signature::embedded(bytes)].into_boxed_slice());
+            formats.push(FormatDescriptor {
+                id,
+                name: id,
+                description: "test",
+                signatures,
+                probe: Some(embedded_probe),
+                open: unused,
+            });
+        }
+        let index = Index::new(&formats);
+        let mut data = vec![0xa5; 0x180000];
+        data.extend_from_slice(b"EMB\x03\xe7");
+        assert_eq!(index.detect(&data).unwrap().id, "embedded_0999");
+        assert_eq!(EMBEDDED_CALLS.load(Ordering::Relaxed), 1);
+        assert!(index.detect(b"unrelated").is_none());
+        assert_eq!(EMBEDDED_CALLS.load(Ordering::Relaxed), 1);
+    }
+    #[test]
+    fn anchored_wrapper_precedes_embedded_children() {
+        const FORMATS: &[FormatDescriptor] = &[
+            FormatDescriptor {
+                id: "wrapper",
+                name: "Wrapper",
+                description: "test",
+                signatures: &[Signature::new(0, b"WRAP")],
+                probe: None,
+                open: unused,
+            },
+            FormatDescriptor {
+                id: "child",
+                name: "Child",
+                description: "test",
+                signatures: &[Signature::embedded(b"LONG_CHILD_MAGIC")],
+                probe: None,
+                open: unused,
+            },
+        ];
+        let index = Index::new(FORMATS);
+        assert_eq!(
+            index.detect(b"WRAP....LONG_CHILD_MAGIC").unwrap().id,
+            "wrapper"
+        );
+        assert_eq!(
+            index.detect(b"code....LONG_CHILD_MAGIC").unwrap().id,
+            "child"
+        );
+    }
+    #[test]
+    fn embedded_prefix_and_work_limits() {
+        const FORMATS: &[FormatDescriptor] = &[FormatDescriptor {
+            id: "embedded",
+            name: "Embedded",
+            description: "test",
+            signatures: &[Signature::embedded(b"EMBD")],
+            probe: None,
+            open: unused,
+        }];
+        let index = Index::new(FORMATS);
+        let mut data = vec![0xa5; PROBE_LIMIT - 4];
+        data.extend_from_slice(b"EMBD");
+        assert!(index.detect(&data).is_some());
+        data.insert(0, 0xa5);
+        assert!(index.detect(&data).is_none());
+        assert!(
+            index
+                .detect(&b"EMBD".repeat(MAX_EMBEDDED_MATCHES + 1))
+                .is_none()
+        );
+    }
     #[test]
     fn exact_signature_precedes_broad_probe_and_corruption_is_not_fallback() {
         let data = include_bytes!("../../tests/fixtures/trx_corrupt/sample.bin");
