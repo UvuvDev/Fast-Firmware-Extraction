@@ -1,0 +1,6 @@
+{
+  "native_format": "lz4_frame",
+  "transform": "Lz4Frame",
+  "sample": "sample.lz4",
+  "expect_failure": true
+}
