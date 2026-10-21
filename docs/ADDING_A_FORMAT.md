@@ -51,6 +51,22 @@ in-memory session. It has no Binary Ninja, Python, CLI, or disk dependency.
   behavior; the CLI uses `name` for the output file.
 - Filesystems/custom layouts: implement `ArchiveReader::names` and `read`.
   Keep the index and any decompressor state in that reader.
+- Archives embedded in a larger image: use
+  `RangeArchive::with_embedded_range(start..end)`, or implement the optional
+  `ArchiveReader::embedded_range`. Return the exact original-input extent that
+  can also be opened as a standalone archive. It must be a nonempty proper
+  subrange, within input bounds and the per-file size limit. Do not mark a
+  standalone archive or decoded stream as embedded. The default is `None`, so
+  existing and newly added whole-file readers need no extra implementation.
+
+For an embedded archive, Binary Ninja exposes two automatic children:
+`Image` retains the complete input for analysis, and `Unpacked contents`
+contains the standalone archive with its usual selectable members. Further
+unpacking is disabled on `Image`, preventing rediscovery of the same embedded
+archive. These labels make no claim that the retained image is executable.
+There are no format-specific Python branches. This presentation changes only
+the Binary Ninja tree; the native member API and CLI continue to return the
+actual archived files without duplicating host bytes on disk.
 
 Optional analysis text (such as a load-address/memory-map report) can be
 attached with `RangeArchive::with_diagnostics(text)` or returned by
@@ -94,13 +110,22 @@ Add at least one valid fixture and one corrupt/truncated fixture:
 ```
 
 The Rust runner requires both kinds for every registered format. Child records
-can contain `children` to verify nested archives. Set `transform` to the native
-transform name only when Binary Ninja also offers a competing decoder (TRX is
-an example). Keep fixtures small. Prefer official producers; record exact tool
+can contain `children` to verify nested archives. For native fixtures, the
+Binary Ninja runner verifies `FirmwareNative` auto-detection and selects that
+dispatcher explicitly, avoiding ambiguity with built-in decoders. An optional
+`transform` can instead select a particular named adapter. Keep fixtures small.
+Prefer official producers; record exact tool
 versions/commands. Verify real firmware locally without committing vendor blobs.
 Expected bytes/hashes must come from inputs or an independent reference tool,
 rather than this parser's output. Format-specific mutation tests can live in
 an inline `#[cfg(test)] mod tests` in the new module.
+
+For embedded fixtures, add `"embedded_range": [start, end]` alongside `children`
+at the affected level. The native runners verify the reported extent; the
+Binary Ninja runner verifies the retained `Image` is byte-identical to its
+parent, the standalone archive slice matches that extent, and all unpacked
+members still match their independent hashes. See `blfs_embedded` and
+`apbl_resources` for examples.
 
 ## Check the result
 

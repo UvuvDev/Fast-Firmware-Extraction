@@ -46,6 +46,12 @@ def test_format_fixture(fixture_dir: Path) -> None:
     session.set_interactive(False)
     if transform := expected.get("transform"):
         session.root_context.set_transform_name(transform)
+    elif expected.get("native_format"):
+        # Verify native auto-detection, then select its dispatcher explicitly:
+        # Binary Ninja may also offer built-in decoders for the same bytes.
+        if not expected.get("expect_failure"):
+            assert "FirmwareNative" in session.root_context.available_transforms
+        session.root_context.set_transform_name("FirmwareNative")
     session.process()
     root = session.root_context
 
@@ -55,10 +61,19 @@ def test_format_fixture(fixture_dir: Path) -> None:
         )
         return
 
-    _check_children(root, expected["children"], fixture_dir.name)
+    _check_children(root, expected["children"], fixture_dir.name, expected.get("embedded_range"))
 
 
-def _check_children(root, expected_children, label):
+def _check_children(root, expected_children, label, embedded_range=None):
+    if embedded_range:
+        assert {child.filename for child in root.children} == {"Image", "Unpacked contents"}
+        image, contents = root.get_child("Image"), root.get_child("Unpacked contents")
+        source = bytes(root.input.read(0, root.input.length))
+        assert bytes(image.input.read(0, image.input.length)) == source
+        assert image.is_leaf and not image.transform_name
+        start, end = embedded_range
+        assert bytes(contents.input.read(0, contents.input.length)) == source[start:end]
+        root = contents
     assert root.children, f"{label}: expected children but got none"
 
     by_name = {c.filename: c for c in root.children}
@@ -74,4 +89,4 @@ def _check_children(root, expected_children, label):
         if "sha256" in info:
             assert hashlib.sha256(content).hexdigest() == info["sha256"], f"{label}/{name}: content mismatch"
         if "children" in info:
-            _check_children(child, info["children"], f"{label}/{name}")
+            _check_children(child, info["children"], f"{label}/{name}", info.get("embedded_range"))

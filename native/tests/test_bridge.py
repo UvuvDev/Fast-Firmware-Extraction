@@ -21,7 +21,8 @@ class NativeBridgeTests(unittest.TestCase):
         if native._load_library() is None:
             raise RuntimeError("build the native library with cargo build --release first")
 
-    def check_children(self, archive, expected):
+    def check_children(self, archive, expected, embedded_range=None):
+        self.assertEqual(archive.embedded_range, tuple(embedded_range) if embedded_range else None)
         self.assertEqual(set(("",) if archive.is_stream else archive.names), set(expected))
         for name, info in expected.items():
             data = archive.read(archive.names[0] if archive.is_stream else name)
@@ -29,7 +30,7 @@ class NativeBridgeTests(unittest.TestCase):
             self.assertEqual(hashlib.sha256(data).hexdigest(), info["sha256"], name)
             if "children" in info:
                 with native.open_archive(None, data) as child:
-                    self.check_children(child, info["children"])
+                    self.check_children(child, info["children"], info.get("embedded_range"))
 
     def test_all_native_fixtures(self):
         covered = set()
@@ -45,7 +46,7 @@ class NativeBridgeTests(unittest.TestCase):
                 else:
                     self.assertEqual(native.detect(data)["id"], identifier)
                     with native.open_archive(None, data) as archive:
-                        self.check_children(archive, expected["children"])
+                        self.check_children(archive, expected["children"], expected.get("embedded_range"))
                     covered.add(identifier)
         self.assertEqual(covered, {info["id"] for info in native.formats()})
 
@@ -115,6 +116,33 @@ class NativeBridgeTests(unittest.TestCase):
 
     def test_detection_does_not_claim_elf(self):
         self.assertIsNone(native.detect(b"\x7fELF" + b"\0" * 100))
+
+    def test_analysis_text_is_copied_and_null_diagnostics_handle_is_safe(self):
+        data = (ROOT / "tests/fixtures/mecp/sample.img").read_bytes()
+        with native.open_archive("mecp", data) as archive:
+            message = archive.diagnostics
+            self.assertIn("modem child loads at 0x8b000600", message)
+        self.assertEqual(archive.diagnostics, message)
+        length = ctypes.c_size_t(999)
+        self.assertFalse(native._load_library().ffe_archive_diagnostics(None, ctypes.byref(length)))
+        self.assertEqual(length.value, 0)
+
+    def test_embedded_extent_and_null_outputs(self):
+        embedded = (ROOT / "tests/fixtures/blfs_embedded/sample.blfs").read_bytes()
+        standalone = (ROOT / "tests/fixtures/blfs/sample.blfs").read_bytes()
+        with native.open_archive(None, embedded) as archive:
+            self.assertEqual(archive.embedded_range, (128, len(embedded)))
+            start, end = archive.embedded_range
+            self.assertEqual(embedded[start:end], standalone)
+            with native.open_archive(None, embedded[start:end]) as contents:
+                self.assertIsNone(contents.embedded_range)
+                self.assertEqual(contents.names, archive.names)
+        offset, length = ctypes.c_size_t(99), ctypes.c_size_t(99)
+        function = native._load_library().ffe_archive_embedded_range
+        self.assertEqual(function(None, ctypes.byref(offset), ctypes.byref(length)), 0)
+        self.assertEqual((offset.value, length.value), (0, 0))
+        self.assertEqual(function(None, None, ctypes.byref(length)), -1)
+        self.assertEqual(function(None, ctypes.byref(offset), None), -1)
 
 
 if __name__ == "__main__":
