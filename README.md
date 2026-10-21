@@ -12,7 +12,7 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 - **Qcdt** — Qualcomm Device Tree Table (QCDT v1/v2/v3, Rust)
 - **QcomMbn** — Qualcomm Legacy MBN Firmware Header (Rust)
 - **ShannonTOC** — Samsung Shannon Baseband TOC (Rust)
-- **UnisocMECP** — Unisoc CP memory-decoupling modem image
+- **UnisocMECP** — Unisoc CP memory-decoupling modem image (Rust)
 - **FwTypeHeader** — Vendor fw-type Header (Rust)
 - **Gpt** — GUID Partition Table (512-byte sectors, Rust)
 - **Ext4** — ext4 filesystem
@@ -50,7 +50,7 @@ cargo build --release --locked
 python3 -m unittest discover -s native/tests -v
 ```
 
-The Binary Ninja FBPK, sparse, boot, self-extract, DTBO, and SquashFS transforms use the library in
+The ported Binary Ninja transforms use the library in
 `target/release/` after a plugin reload/restart. If the library is absent,
 the existing Python parser is used. A present but incompatible library or
 a Rust parse error is reported as a failure. Use the default Cargo target
@@ -82,6 +82,12 @@ Boot v0–v4 and vendor boot v3/v4 extract kernel/ramdisk, legacy second-stage
 and DTBO/DTB segments, v4 signature bytes, fragmented vendor ramdisks, and
 bootconfig in memory. Fixtures use the official AOSP producer; see
 [boot fixture provenance](tests/fixture_sources/boot/README.md).
+
+MECP extracts the embedded modem, CP bootstrap, and optional AVB vbmeta.
+Sibling memory regions are reported in the memory map rather than emitted as
+files. The adjusted modem load address is logged by Binary Ninja and printed
+by the CLI. Recognized AVB footers with invalid lengths/ranges are rejected;
+cryptographic signatures are not verified.
 
 GPT currently uses 512-byte logical sectors and checks both header and
 partition-array CRC32s. Extended header/entry sizes and UTF-16LE partition

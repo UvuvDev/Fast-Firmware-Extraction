@@ -1,5 +1,5 @@
 """One adapter for all Rust formats, generated from the native inventory."""
-from binaryninja import DataBuffer, TransformCapabilities
+from binaryninja import DataBuffer, TransformCapabilities, log_info
 from .container_base import FilesystemContainer
 from .native import NativeArchive, detect, formats, open_archive, probe_limit
 
@@ -11,6 +11,8 @@ class NativeContainer(FilesystemContainer):
     capabilities = TransformCapabilities.TransformSupportsContext
 
     def decode_without_selection(self, fs: NativeArchive, context):
+        if fs.diagnostics and (fs.is_stream or context.has_available_files):
+            log_info(fs.diagnostics)
         if not fs.is_stream:
             return None
         child = context.create_child(DataBuffer(fs.read(fs.names[0])), "")

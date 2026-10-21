@@ -87,6 +87,9 @@ fn extract(archive: Archive, output: &Path, depth: usize, budget: &mut Budget) -
     if depth > MAX_DEPTH {
         return Err("recursive extraction exceeds depth limit".into());
     }
+    if !archive.diagnostics().is_empty() {
+        eprintln!("{}", archive.diagnostics());
+    }
     fs::create_dir(output)?;
     let mut paths = Paths::default();
     let manifest = paths.allocate(".ffe-paths.tsv", false);

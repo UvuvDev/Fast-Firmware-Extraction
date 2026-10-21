@@ -1,0 +1,38 @@
+{
+  "sample": "sample.img",
+  "native_format": "mecp",
+  "children": {
+    "modem": {
+      "length": 721,
+      "sha256": "79ea11842f177cab7f92ad4feb5ee289956b2129054340547a464ae48fb7bcfb",
+      "children": {
+        "code": {
+          "length": 601,
+          "sha256": "126cbe3b6b782af84da5ffbd0d5452e894fc6154c1b87217b770e4968ed656f6",
+          "children": {
+            "dt00": {
+              "length": 238,
+              "sha256": "2a5dda13456e9122ad079033132b9706d2f06b285204d0dff24f431952d6a470"
+            },
+            "dt01": {
+              "length": 311,
+              "sha256": "97ed4fa977a4cb5e7659705e6c8858c8ac25b5519d9e22ceb90c7e004eb9984d"
+            }
+          }
+        },
+        "signature": {
+          "length": 19,
+          "sha256": "959be147215793f0b860e73727d2124df80b645d3da656dfa807f11de2e0be45"
+        },
+        "cert_chain": {
+          "length": 21,
+          "sha256": "97f9d8301938ef5542f5ac8023d73f35749811eddc5a06844dd82433fe7b6de0"
+        }
+      }
+    },
+    "cp_bootcode": {
+      "length": 16,
+      "sha256": "4b8dd4800791d933c2cfbfab19e1c22e755b025480e1b0fcf969853fe14e45d1"
+    }
+  }
+}

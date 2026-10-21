@@ -116,6 +116,16 @@ class NativeBridgeTests(unittest.TestCase):
     def test_detection_does_not_claim_elf(self):
         self.assertIsNone(native.detect(b"\x7fELF" + b"\0" * 100))
 
+    def test_analysis_text_is_copied_and_null_diagnostics_handle_is_safe(self):
+        data = (ROOT / "tests/fixtures/mecp/sample.img").read_bytes()
+        with native.open_archive("mecp", data) as archive:
+            message = archive.diagnostics
+            self.assertIn("modem child loads at 0x8b000600", message)
+        self.assertEqual(archive.diagnostics, message)
+        length = ctypes.c_size_t(999)
+        self.assertFalse(native._load_library().ffe_archive_diagnostics(None, ctypes.byref(length)))
+        self.assertEqual(length.value, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

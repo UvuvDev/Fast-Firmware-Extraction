@@ -52,6 +52,11 @@ in-memory session. It has no Binary Ninja, Python, CLI, or disk dependency.
 - Filesystems/custom layouts: implement `ArchiveReader::names` and `read`.
   Keep the index and any decompressor state in that reader.
 
+Optional analysis text (such as a load-address/memory-map report) can be
+attached with `RangeArchive::with_diagnostics(text)` or returned by
+`ArchiveReader::diagnostics`. The generic adapter logs it during extraction;
+the CLI prints it to stderr. Format code needs no Binary Ninja dependency.
+
 Use checked helpers from `crate::bytes` and checked arithmetic. RangeArchive
 validates every range before discovery. The common Archive wrapper rejects
 unsafe/duplicate names, caps input at 1 GiB, members at one million, and returned

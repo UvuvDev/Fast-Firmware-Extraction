@@ -19,6 +19,10 @@ pub trait ArchiveReader {
     fn is_decoded_stream(&self) -> bool {
         false
     }
+    /// Optional human-readable analysis information, owned by this reader.
+    fn diagnostics(&self) -> &str {
+        ""
+    }
 }
 
 pub struct Member {
@@ -31,6 +35,7 @@ pub struct RangeArchive {
     members: Vec<Member>,
     names: Vec<String>,
     decoded_stream: bool,
+    diagnostics: String,
 }
 impl RangeArchive {
     pub fn new(data: Vec<u8>, members: Vec<Member>) -> Result<Self> {
@@ -53,6 +58,7 @@ impl RangeArchive {
             members,
             names,
             decoded_stream: false,
+            diagnostics: String::new(),
         })
     }
     pub fn single(name: &str, data: Vec<u8>) -> Result<Self> {
@@ -70,8 +76,15 @@ impl RangeArchive {
         archive.decoded_stream = true;
         Ok(archive)
     }
+    pub fn with_diagnostics(mut self, diagnostics: String) -> Self {
+        self.diagnostics = diagnostics;
+        self
+    }
 }
 impl ArchiveReader for RangeArchive {
+    fn diagnostics(&self) -> &str {
+        &self.diagnostics
+    }
     fn is_decoded_stream(&self) -> bool {
         self.decoded_stream
     }
@@ -149,6 +162,9 @@ impl Archive {
     }
     pub fn is_decoded_stream(&self) -> bool {
         self.reader.is_decoded_stream()
+    }
+    pub fn diagnostics(&self) -> &str {
+        self.reader.diagnostics()
     }
     pub fn read(&self, index: usize) -> Result<Vec<u8>> {
         if index >= self.names().len() {

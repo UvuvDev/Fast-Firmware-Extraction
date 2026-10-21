@@ -45,6 +45,9 @@ def _load_library():
     library.ffe_archive_count.restype = ctypes.c_size_t
     library.ffe_archive_flags.argtypes = [ctypes.c_void_p]
     library.ffe_archive_flags.restype = ctypes.c_uint32
+    if hasattr(library, "ffe_archive_diagnostics"):
+        library.ffe_archive_diagnostics.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_size_t)]
+        library.ffe_archive_diagnostics.restype = ctypes.c_void_p
     library.ffe_archive_name.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.POINTER(ctypes.c_size_t)]
     library.ffe_archive_name.restype = ctypes.c_void_p
     library.ffe_archive_read.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.POINTER(ctypes.c_void_p),
@@ -108,6 +111,14 @@ class NativeArchive:
         self._finalizer = weakref.finalize(self, library.ffe_archive_close, handle)
         try:
             self.is_stream = bool(library.ffe_archive_flags(handle) & 1)
+            self.diagnostics = ""
+            if hasattr(library, "ffe_archive_diagnostics"):
+                length = ctypes.c_size_t()
+                pointer = library.ffe_archive_diagnostics(handle, ctypes.byref(length))
+                if length.value and not pointer:
+                    raise ValueError("native archive returned invalid analysis text")
+                if pointer:
+                    self.diagnostics = ctypes.string_at(pointer, length.value).decode("utf-8")
             names = []
             for index in range(library.ffe_archive_count(handle)):
                 length = ctypes.c_size_t()
