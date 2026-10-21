@@ -9,5 +9,6 @@
       "length": 4,
       "sha256": "8950abfda7b727630760dd35bcf5c3daa7631aff223a90f7728c0d2521dde10c"
     }
-  }
+  },
+  "native_format": "qcdt"
 }

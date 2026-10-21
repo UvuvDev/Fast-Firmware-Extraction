@@ -67,6 +67,7 @@ from typing import Callable
 
 from ..common.binstruct import BinStruct
 from ..common.container_base import Entry, OffsetTableContainer
+from ..common.native import formats
 
 MAGIC = b"QCDT"
 
@@ -136,4 +137,5 @@ class Qcdt(OffsetTableContainer):
         return parser(data)
 
 
-Qcdt.register()
+if not any(info["id"] == "qcdt" for info in formats()):
+    Qcdt.register()
