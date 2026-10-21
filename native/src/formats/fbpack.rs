@@ -4,8 +4,8 @@
 //! v1 traversal follows the existing Python port, whose documented reference
 //! is CalyxOS/scripts fbpacktool.py (Apache-2.0).
 //! CRC fields remain advisory, matching the Python implementation.
-use std::collections::HashSet;
-use crate::archive::{ArchiveReader, Member, RangeArchive, Result, MAX_MEMBERS};
+use std::collections::{HashMap, HashSet};
+use crate::archive::{validate_name, ArchiveReader, Member, RangeArchive, Result, MAX_MEMBERS};
 use crate::bytes::{get, le32};
 use crate::registry::{FormatDescriptor, Signature};
 
@@ -72,11 +72,33 @@ fn v2(data: &[u8]) -> Result<Vec<Member>> {
 }
 fn open(data: Vec<u8>) -> Result<Box<dyn ArchiveReader>> {
     if get(&data, 0, 4)? != b"FBPK" { return Err("bad FBPK magic".into()); }
-    let members = match le32(&data, 4)? {
+    let mut members = match le32(&data, 4)? {
         1 => v1(&data)?, 2 => v2(&data)?,
         _ => return Err("unsupported FBPK version".into()),
     };
-    Ok(Box::new(RangeArchive::new(data, members)?))
+    // FBPK names identify flash targets, not unique filesystem paths. Real
+    // packages repeat targets for product variants and use partition:N names.
+    // Preserve every record while keeping the shared archive contract strict.
+    let mut taken = HashSet::new();
+    let mut suffixes = HashMap::new();
+    let mut renamed = 0;
+    for member in &mut members {
+        let base = member.name.replace(':', "%3A");
+        validate_name(&base)?;
+        let mut candidate = base.clone();
+        let suffix = suffixes.entry(base.clone()).or_insert(0usize);
+        while !taken.insert(candidate.clone()) {
+            *suffix += 1;
+            candidate = format!("{base}~{suffix}");
+        }
+        renamed += usize::from(candidate != member.name);
+        member.name = candidate;
+    }
+    Ok(Box::new(RangeArchive::new(data, members)?.with_diagnostics(
+        if renamed == 0 { String::new() } else {
+            format!("FBPK: renamed {renamed} entries; ':' is encoded as %3A and repeated names receive ~N suffixes in table order.")
+        }
+    )))
 }
 
 #[cfg(test)]
@@ -103,11 +125,18 @@ mod tests {
         }
     }
     #[test]
-    fn unsafe_and_duplicate_names_fail_before_extraction() {
+    fn unsafe_names_fail_before_extraction() {
         let mut data = V2.to_vec();
         data[116..152].fill(0); data[116..125].copy_from_slice(b"../escape"); reject(data);
+    }
+    #[test]
+    fn repeated_flash_targets_preserve_both_payloads() {
         let mut data = V2.to_vec();
-        data[220..256].fill(0); data[220..225].copy_from_slice(b"alpha"); reject(data);
+        data[220..256].fill(0); data[220..225].copy_from_slice(b"alpha");
+        let archive = Archive::open("fbpack", data).unwrap();
+        assert_eq!(archive.names(), ["alpha", "alpha~1"]);
+        assert_eq!(archive.read_named("alpha").unwrap(), b"ALPHA_PAYLOAD");
+        assert_eq!(archive.read_named("alpha~1").unwrap(), b"BETA!");
     }
     #[test]
     fn skips_v1_table_markers_and_preserves_payloads() {
