@@ -16,5 +16,9 @@
       "length": 33,
       "sha256": "6cbad5d6b30d932e54cb51f7e746cf8c59414d546bfe41370149e745546d048e"
     }
-  }
+  },
+  "embedded_range": [
+    128,
+    2493
+  ]
 }
