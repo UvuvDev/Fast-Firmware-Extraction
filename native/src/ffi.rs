@@ -4,6 +4,12 @@ pub extern "C" fn ffe_abi_version() -> u32 {
     4
 }
 
+/// Additive ABI capability: maximum input prefix accepted by ffe_detect.
+#[unsafe(no_mangle)]
+pub extern "C" fn ffe_probe_limit() -> usize {
+    crate::registry::PROBE_LIMIT
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn ffe_format_count() -> usize {
     // Invalid contributor metadata must not unwind across the C boundary.
@@ -42,7 +48,7 @@ pub unsafe extern "C" fn ffe_format_info(
     value.as_ptr()
 }
 
-/// Return inventory index or usize::MAX. Probes receive at most 64 KiB.
+/// Return inventory index or usize::MAX. Probes receive at most the prefix reported by ffe_probe_limit.
 /// # Safety
 /// data points to length readable bytes, unchanged during the call.
 #[unsafe(no_mangle)]
