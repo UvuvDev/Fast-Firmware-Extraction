@@ -32,7 +32,7 @@ pub const FORMAT: FormatDescriptor = FormatDescriptor {
 
 Signatures support nonzero offsets and alternatives. A format without fixed
 magic can use `Signature::byte_range` plus a discriminator in `probe` (see
-LZMA). Probes receive at most 1 MiB and must bound their own allocations and
+LZMA). Probes receive at most 4 MiB and must bound their own allocations and
 work. Python queries the backend for its probe limit. Detection indexes signatures by offset and first byte, tests only those
 buckets, and invokes probes only for matching signatures. Longer exact
 signatures win; equal lengths resolve by stable ID. Use a discriminator for
@@ -51,6 +51,11 @@ in-memory session. It has no Binary Ninja, Python, CLI, or disk dependency.
   behavior; the CLI uses `name` for the output file.
 - Filesystems/custom layouts: implement `ArchiveReader::names` and `read`.
   Keep the index and any decompressor state in that reader.
+
+Optional analysis text (such as a load-address/memory-map report) can be
+attached with `RangeArchive::with_diagnostics(text)` or returned by
+`ArchiveReader::diagnostics`. The generic adapter logs it during extraction;
+the CLI prints it to stderr. Format code needs no Binary Ninja dependency.
 
 Use checked helpers from `crate::bytes` and checked arithmetic. RangeArchive
 validates every range before discovery. The common Archive wrapper rejects
@@ -129,6 +134,18 @@ candidate's probe runs. This verifies candidate selection, not a performance
 claim for 1,000 fully implemented parsers. Shared capabilities should grow only
 when multiple formats need them; adding a parser does not require a shared
 change by default.
+
+Resource archives embedded in executables can opt in with
+`Signature::embedded(b"MAGC")` (exact magic, at least four bytes). Anchored
+formats are tried first so child archives cannot steal their wrappers. A shared
+Aho-Corasick matcher scans the bounded 4 MiB prefix once for all embedded
+signatures; duplicate patterns are shared and only matching formats are probed.
+A 65,536-hit work limit rejects pathological repeated-magic inputs. Each
+embedded reader must locate and validate its own table in the original input;
+its optional probe should reject incidental magic constants in executable code.
+No central format list or parser-specific dispatch is needed. The registry
+also tests 1,000 embedded descriptors and anchored-wrapper priority.
+
 
 Existing Python implementations under `formats/` remain supported during
 migration and still auto-import. DTBO and SquashFS retain their Python fallback

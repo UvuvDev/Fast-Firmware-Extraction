@@ -4,24 +4,28 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 
 ## Supported formats
 
-- **FBPack** — Fastboot Package (FBPK) v1/v2
-- **AndroidBootImage** — Android Boot / Vendor Boot Image
-- **AndroidSparse** — Android Sparse Image
-- **AndroidSelfExtract** — Android self-extracting vendor blob
-- **Dtbo** — DTBO / DT Table Image
-- **Qcdt** — Qualcomm Device Tree Table (QCDT)
-- **QcomMbn** — Qualcomm Legacy MBN Firmware Header
-- **ShannonTOC** — Samsung Shannon Baseband TOC
-- **UnisocMECP** — Unisoc CP memory-decoupling modem image
-- **FwTypeHeader** — Vendor fw-type Header
-- **Gpt** — GUID Partition Table (GPT)
-- **Ext4** — ext4 filesystem
-- **Erofs** — EROFS filesystem
-- **F2fs** — F2FS filesystem
-- **Squashfs** — SquashFS filesystem
-- **Ubi** — UBI flash image
+- **FBPack** — Fastboot Package (FBPK) v1/v2 (Rust)
+- **AndroidBootImage** — Android Boot / Vendor Boot Image (Rust)
+- **AndroidSparse** — Android Sparse Image (Rust)
+- **AndroidSelfExtract** — Android self-extracting vendor blob (Rust)
+- **Dtbo** — DTBO / DT Table Image (Rust)
+- **Qcdt** — Qualcomm Device Tree Table (QCDT v1/v2/v3, Rust)
+- **QcomMbn** — Qualcomm Legacy MBN Firmware Header (Rust)
+- **ShannonTOC** — Samsung Shannon Baseband TOC (Rust)
+- **UnisocMECP** — Unisoc CP memory-decoupling modem image (Rust)
+- **FwTypeHeader** — Vendor fw-type Header (Rust)
+- **SamsungPit** — Samsung PIT partition descriptors (Rust)
+- **Gpt** — GUID Partition Table (512-byte sectors, Rust)
+- **Ext4** — ext4 filesystem (Rust)
+- **Erofs** — EROFS filesystem (uncompressed, Rust)
+- **F2fs** — F2FS static-NAT filesystem, 4 KiB (Rust)
+- **Squashfs** — SquashFS filesystem (Rust)
+- **Ubifs** — UBIFS committed filesystem, none/raw DEFLATE (Rust)
+- **Ubi** — UBI flash image (Rust)
 - **NetgearChk** — NETGEAR CHK firmware wrapper (Rust)
 - **Trx** — Broadcom TRX v1/v2 partitions with CRC32 verification (Rust)
+- **Blfs** — standalone/embedded BLFS v1 bootloader resource archives (Rust)
+- **Lz4Frame** — modern LZ4 frames, linked/independent blocks and checksums (Rust)
 - **LzmaAlone** — LZMA-alone compressed images (Rust)
 
 Add a new unpacker with **one Rust module under `native/src/formats/` plus
@@ -31,8 +35,9 @@ are automatic. See [the contributor guide](docs/ADDING_A_FORMAT.md) and
 
 ## Rust unpacking
 
-The Rust core handles **DTBO / ACPIO** and the complete **NETGEAR R7000**
-chain: **CHK → TRX → LZMA kernel + SquashFS v4/XZ filesystem**. CHK/TRX
+The formats marked Rust above share one native core. It also handles the
+complete **NETGEAR R7000** chain:
+**CHK → TRX → LZMA kernel + SquashFS v4/XZ filesystem**. CHK/TRX
 parsers validate bounds, and TRX verifies CRC32. LZMA has dictionary and
 output limits; SquashFS exposes regular files and skips symlinks/specials.
 Tests run without Python or Binary Ninja:
@@ -49,13 +54,14 @@ cargo build --release --locked
 python3 -m unittest discover -s native/tests -v
 ```
 
-The Binary Ninja DTBO and SquashFS transforms automatically use the library in
+The ported Binary Ninja transforms use the library in
 `target/release/` after a plugin reload/restart. If the library is absent,
 the existing Python parser is used. A present but incompatible library or
 a Rust parse error is reported as a failure. Use the default Cargo target
 directory when building for the plugin. CHK, TRX and LZMA require the Rust
 library. Parsing/extraction runs in Rust; Python adapts Container Browser's
-discovery and file-selection protocol. Other unpackers remain Python.
+discovery and file-selection protocol. All 23 current format modules have Rust
+implementations; legacy Python readers remain as fallbacks and parity references.
 
 The native build uses `backhand` (MIT/Apache-2.0) with XZ enabled, statically
 links liblzma, and uses `lzma-rust2` (Apache-2.0). No external extraction
@@ -77,6 +83,31 @@ disk paths and nested directories. Case collisions receive suffixes. The
 output directory must be new. Use `--list-formats` to view the built registry.
 See [R7000 validation and fixture provenance](docs/R7000.md).
 
+Boot v0–v4 and vendor boot v3/v4 extract kernel/ramdisk, legacy second-stage
+and DTBO/DTB segments, v4 signature bytes, fragmented vendor ramdisks, and
+bootconfig in memory. Fixtures use the official AOSP producer; see
+[boot fixture provenance](tests/fixture_sources/boot/README.md).
+
+MECP extracts the embedded modem, CP bootstrap, and optional AVB vbmeta.
+Sibling memory regions are reported in the memory map rather than emitted as
+files. The adjusted modem load address is logged by Binary Ninja and printed
+by the CLI. Recognized AVB footers with invalid lengths/ranges are rejected;
+cryptographic signatures are not verified.
+
+GPT currently uses 512-byte logical sectors and checks both header and
+partition-array CRC32s. Extended header/entry sizes and UTF-16LE partition
+names are supported; backup-table recovery and 4 KiB sectors are not yet implemented.
+
+Self-extracting vendor wrappers scan at most 1 MiB for the `tail -n +N $0 | tar`
+marker and expose the remaining bytes as `payload.gz`. Scripts are never run.
+Payload targets at or before the marker are rejected to prevent recursion;
+Python retains the legacy fallback when the Rust library is absent.
+
+Android sparse preserves the automatic decoded child in Container Browser.
+Its CLI output is `image.raw`. RAW, FILL, DONT_CARE, and CRC32 chunks are
+validated, including supplied checksums, before exposing output; expansion
+uses the common 512 MiB per-file limit.
+
 The DTBO Rust implementation extracts stored payload bytes and ignores v1
 compression flags; it does not decompress overlays. It validates every
 payload before discovery, so an out-of-bounds payload rejects the whole
@@ -95,3 +126,37 @@ BN_DISABLE_USER_PLUGINS=1 ./scripts/run_tests.sh -v --confcutdir=tests
 
 This isolates unrelated user plugins and keeps pytest from importing the
 hyphenated checkout directory as a Python package.
+
+UBI reorders logical eraseblocks and extracts named static/dynamic volumes.
+It uses the first layout-table copy and rejects missing/duplicate data LEBs;
+update recovery and UBI header/data CRC verification are not implemented.
+
+Ext4 supports standard/padless superblocks, extent trees, direct through
+triple-indirect mappings, sparse/unwritten blocks, and small inline files.
+Inline directories/xattr overflow, journal replay, meta_bg, encryption, casefold,
+and checksum verification are outside the current implementation.
+
+EROFS handles flat files, inline tails, compact/extended inodes and single-device
+chunk mappings. Compressed inodes, metabox, global 48BIT addressing, multiple
+devices and checksum verification remain unsupported. Filesystem readers expose
+regular files and skip symlinks and special nodes.
+
+Samsung PIT exposes each named partition's raw 132-byte descriptor. A standalone
+PIT contains no partition payloads; device geometry and obsolete file offsets
+are never used to carve imaginary contents.
+
+UBIFS checks node CRCs and reconstructs the committed index with uncompressed
+or raw DEFLATE data. Dirty/diverging masters, journal replay, authentication,
+LZO and ZSTD are unsupported. DEFLATE uses pure Rust `miniz_oxide`; each data
+node expands to at most 4 KiB. UBI volumes chain into UBIFS automatically.
+
+F2FS handles 4 KiB blocks, checkpoint pack/version selection, NAT copy selection,
+inline files/directories, extra attributes, sparse data and indirect node tiers.
+It reads static NAT entries only: inline xattrs, compression/encryption,
+checkpoint-payload overflow, NAT journal/roll-forward replay and checksums are
+unsupported. F2FS/UBIFS validation uses synthetic fixtures, not device images.
+
+BLFS detects a standalone table or one embedded within the first 4 MiB of an
+executable. It preserves member names and stored bytes; LZ4 members recursively
+decode through the normal registry. The v1 layout is verified against the real
+Cubs spacecraft ABL image and independent extraction of all 28 resource files.
