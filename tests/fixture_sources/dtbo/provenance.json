@@ -1,0 +1,90 @@
+{
+  "aosp_project": "platform/system/libufdt",
+  "aosp_tag": "android-16.0.0_r1",
+  "aosp_commit": "7327a003b2588845698b0993c454719a1f7005dc",
+  "mkdtboimg_sha256": "04011264802cc566cb994b71344fd20e6f58363293e4ce80757b8176a165d7be",
+  "dtc_version": "Version: DTC 1.8.1",
+  "commands": [
+    [
+      "dtc",
+      "-@",
+      "-I",
+      "dts",
+      "-O",
+      "dtb",
+      "-o",
+      "overlay0.dtbo",
+      "overlay0.dts"
+    ],
+    [
+      "dtc",
+      "-@",
+      "-I",
+      "dts",
+      "-O",
+      "dtb",
+      "-o",
+      "overlay1.dtbo",
+      "overlay1.dts"
+    ],
+    [
+      "python3",
+      "third_party/aosp_mkdtboimg/mkdtboimg.py",
+      "create",
+      "sample-v0.img",
+      "--version=0",
+      "--page_size=4096",
+      "overlay0.dtbo",
+      "--id=0x100",
+      "--rev=0x10",
+      "--custom0=0x1234",
+      "overlay1.dtbo",
+      "--id=0x200",
+      "--rev=0x20",
+      "--custom0=0x5678"
+    ],
+    [
+      "python3",
+      "third_party/aosp_mkdtboimg/mkdtboimg.py",
+      "dump",
+      "sample-v0.img",
+      "--output=dump-v0.txt",
+      "--dtb=extracted-v0"
+    ],
+    [
+      "python3",
+      "third_party/aosp_mkdtboimg/mkdtboimg.py",
+      "create",
+      "sample-v1.img",
+      "--version=1",
+      "--page_size=4096",
+      "overlay0.dtbo",
+      "--id=0x100",
+      "--rev=0x10",
+      "--custom0=0x1234",
+      "overlay1.dtbo",
+      "--id=0x200",
+      "--rev=0x20",
+      "--custom0=0x5678",
+      "--flags=0x100"
+    ],
+    [
+      "python3",
+      "third_party/aosp_mkdtboimg/mkdtboimg.py",
+      "dump",
+      "sample-v1.img",
+      "--output=dump-v1.txt",
+      "--dtb=extracted-v1"
+    ]
+  ],
+  "artifacts": {
+    "tests/fixture_sources/dtbo/overlay0.dtbo": "2a5dda13456e9122ad079033132b9706d2f06b285204d0dff24f431952d6a470",
+    "tests/fixture_sources/dtbo/overlay1.dtbo": "97ed4fa977a4cb5e7659705e6c8858c8ac25b5519d9e22ceb90c7e004eb9984d",
+    "tests/fixtures/dtbo_aosp_v0/sample.img": "009796e4019529f378391dac5b7a8e4bf46a26e2ae5e85fccebc9aa083944eb9",
+    "tests/fixtures/dtbo_aosp_v0/expected.json": "e3110a19b694ffe23e1ad1cc435f8f13726f58d885cd1554ba518ec9dfbc5161",
+    "tests/fixtures/dtbo_aosp_v0/official_dump.txt": "f209b070b569907175229b62c2ec93ea5c2e0a962dc707f0d097a3b91ff23ac0",
+    "tests/fixtures/dtbo_aosp_v1/sample.img": "a91cc34a8489599b9d8fa75fd9bd8371c180d88361786a09e3fcce493aea774e",
+    "tests/fixtures/dtbo_aosp_v1/expected.json": "e3110a19b694ffe23e1ad1cc435f8f13726f58d885cd1554ba518ec9dfbc5161",
+    "tests/fixtures/dtbo_aosp_v1/official_dump.txt": "5ec30e5473aaa3e96ec964f422abb4ad3be532150b007a76052a40dab1f00f6e"
+  }
+}

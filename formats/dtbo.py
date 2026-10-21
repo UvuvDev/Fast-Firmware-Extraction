@@ -25,6 +25,7 @@ from __future__ import annotations
 
 from ..common.binstruct import BinStruct
 from ..common.container_base import Entry, OffsetTableContainer
+from ..common.native import formats
 
 _DTBO_MAGIC = 0xD7B7AB1E
 _ACPIO_MAGIC = 0x41435049
@@ -77,4 +78,5 @@ class Dtbo(OffsetTableContainer):
         return _parse_entries(data)
 
 
-Dtbo.register()
+if not any(info["id"] == "dtbo" for info in formats()):
+    Dtbo.register()

@@ -4,6 +4,8 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 
 ## Supported formats
 
+- **Dtbo** — DTBO / DT Table Image (Rust)
+
 Formats land one at a time, each as its own PR. Add a new unpacker with
 **one Rust module under `native/src/formats/` plus fixtures**. Build
 discovery, Python registration, and recursive CLI dispatch are automatic.
@@ -84,3 +86,11 @@ BN_DISABLE_USER_PLUGINS=1 ./scripts/run_tests.sh -v --confcutdir=tests
 
 This isolates unrelated user plugins and keeps pytest from importing the
 hyphenated checkout directory as a Python package.
+
+The DTBO Rust implementation extracts stored payload bytes and ignores v1
+compression flags; it does not decompress overlays. It validates every
+payload before discovery, so an out-of-bounds payload rejects the whole
+table earlier than the Python parser's extraction-time check. Coverage includes
+v0/v1 images generated and independently extracted with a pinned copy of
+AOSP's official `mkdtboimg.py`, containing valid overlays compiled with dtc.
+See [fixture provenance and regeneration](tests/fixture_sources/dtbo/README.md).
