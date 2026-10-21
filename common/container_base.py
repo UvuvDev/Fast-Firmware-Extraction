@@ -6,9 +6,8 @@ Shannon TOC) or :class:`FilesystemContainer` (a tree-walked filesystem —
 ext4). Both funnel every container-supplied name through
 ``common.sanitize`` and bounds-check every offset/size against the actual
 input length before slicing, so individual formats can't forget either.
-Only drop to :class:`ContainerTransform` directly for a shape that
-genuinely fits neither (see docs/ADDING_A_FORMAT.md) — that's a signal to
-loop in the architecture agent, not a routine choice.
+These are the retained Python adapters. New unpackers use the Rust reader
+contract described in docs/ADDING_A_FORMAT.md.
 """
 
 from __future__ import annotations
@@ -111,6 +110,10 @@ class OffsetTableContainer(ContainerTransform):
 
 
 class FilesystemContainer(ContainerTransform):
+    def configure_child(self, child, path: str) -> None:
+        """Optionally select a known decoder for a newly extracted child."""
+        pass
+
     def open_filesystem(self, data: bytes) -> Any:
         raise NotImplementedError
 
@@ -159,7 +162,8 @@ class FilesystemContainer(ContainerTransform):
 
             try:
                 content = self.read_file(fs, original_path)
-                context.create_child(DataBuffer(content), name)
+                child = context.create_child(DataBuffer(content), name)
+                self.configure_child(child, original_path)
             except Exception as e:
                 context.create_child(DataBuffer(b""), name, result=TransformResult.TransformFailure, message=str(e))
                 complete = False

@@ -1,182 +1,132 @@
-# Adding a format
+# Adding a Rust format
 
-Adding a new container format to this plugin should cost **one new file
-under `formats/`, and nothing else**. Never edit `__init__.py` (it
-auto-discovers every module under `formats/`), never edit another format's
-file, and only touch `common/` if you've confirmed with the architecture
-agent that this format genuinely needs a new shared capability.
+Add laterally: **one file under `native/src/formats/` plus fixtures**.
+Do not add an enum variant, Python adapter, registration call, CLI branch,
+Cargo test target, or edit another parser. `build.rs` discovers sibling `.rs`
+files and generates the module list and registry. Python and the CLI consume
+that registry. Dependencies genuinely needed by a new reader belong in Cargo.
 
-## 1. Pick a base class
+## Start from the template
 
-Almost every container format is one of two shapes:
+Copy `native/templates/format.rs` to `native/src/formats/<format_id>.rs`.
+Use a lowercase identifier such as `vendor_image` for both the filename and
+`FORMAT.id`. Give `FORMAT.name` a unique Binary Ninja transform name.
+The template's EXMP layout is illustrative: replace its signature and `open`
+implementation with the verified format, and record the reference source,
+license, supported versions/compression, and fixture provenance in the module.
+`native/src/formats/netgear_chk.rs` is a real offset-container example;
+`lzma_alone.rs` is a decoded stream; `squashfs.rs` is a filesystem reader.
 
-- **`OffsetTableContainer`** — a header followed by a flat table of named
-  `(offset, size)` entries. Examples in this repo: `formats/fbpack.py`
-  (FBPACK v1/v2 — a linked-list table and a direct-offset table, both fit),
-  `formats/shannon_toc.py` (Shannon baseband TOC).
-- **`FilesystemContainer`** — a tree you walk to get paths, then read a
-  file by path. Example: `formats/ext4.py`.
+Each module exports one `pub const FORMAT: FormatDescriptor`:
 
-If neither fits (rare — one example so far: `formats/android_selfextract.py`,
-a "detect and carve exactly one child" shape), implement
-`perform_decode_with_context` directly against `ContainerTransform` and
-say so in your PR/summary — that's a signal for the architecture agent to
-look at whether it's actually a recurring shape worth a third base class,
-not something to decide unilaterally.
-
-## 2. Template — `OffsetTableContainer`
-
-```python
-"""One paragraph: what real-world artifact is this, where does it show up
-(what device/build produces it), and where did you verify the struct
-layout — a real sample file, a public reference implementation (name it,
-note its license), or both. If you didn't verify against a real sample,
-say so explicitly.
-"""
-
-from __future__ import annotations
-
-from ..common.binstruct import BinStruct, cstr
-from ..common.container_base import Entry, OffsetTableContainer
-
-MAGIC = b"...."
-
-
-class _HeaderOrEntry(BinStruct):
-    _format = "<..."
-    _fields = ("field_a", "field_b")
-
-
-class MyFormat(OffsetTableContainer):
-    MAGIC = MAGIC
-    name = "MyFormat"
-    long_name = "My Format, Spelled Out"
-
-    def parse_entries(self, data: bytes) -> list[Entry]:
-        # Parse the header + entry table, return Entry(name, offset, size)
-        # per extractable member. Let BinStruct's bounds checking raise on
-        # a truncated/corrupt buffer — the base class turns that into
-        # TransformResult.TransformFailure for you.
-        ...
-
-
-MyFormat.register()
+```rust
+pub const FORMAT: FormatDescriptor = FormatDescriptor {
+    id: "vendor_image",
+    name: "VendorImage",
+    description: "Vendor firmware image",
+    signatures: &[Signature::new(0, b"MAGC")],
+    probe: None,
+    open,
+};
 ```
 
-`OffsetTableContainer` handles: the discovery/extraction two-phase
-protocol, sanitizing and deduping every entry name before it becomes a
-child filename, bounds-checking every `offset`/`size` against the actual
-buffer length, and mapping any exception out of `parse_entries` to a
-proper extraction failure. You only write the parsing logic.
+Signatures support nonzero offsets and alternatives. A format without fixed
+magic can use `Signature::byte_range` plus a discriminator in `probe` (see
+LZMA). Probes receive at most 64 KiB and must bound their own allocations and
+work. Detection indexes signatures by offset and first byte, tests only those
+buckets, and invokes probes only for matching signatures. Longer exact
+signatures win; equal lengths resolve by stable ID. Use a discriminator for
+overlapping formats; a full parse failure propagates without trying another
+format. Broad signatures should be exceptional.
 
-## 3. Template — `FilesystemContainer`
+## Return a reader
 
-```python
-from ..common.container_base import FilesystemContainer
+`open(Vec<u8>) -> Result<Box<dyn ArchiveReader>>` owns input and returns an
+in-memory session. It has no Binary Ninja, Python, CLI, or disk dependency.
 
+- Offset tables: return `RangeArchive::new(data, Vec<Member>)`.
+- One decoded stream: return `RangeArchive::single(name, decoded_bytes)`.
+- Filesystems/custom layouts: implement `ArchiveReader::names` and `read`.
+  Keep the index and any decompressor state in that reader.
 
-class MyFilesystem(FilesystemContainer):
-    name = "MyFilesystem"
-    long_name = "My Filesystem"
+Use checked helpers from `crate::bytes` and checked arithmetic. RangeArchive
+validates every range before discovery. The common Archive wrapper rejects
+unsafe/duplicate names, caps input at 1 GiB, members at one million, and returned
+file bytes at 512 MiB. Readers must also bound decompression and metadata
+allocation **before** allocating them. Emit regular files; skip firmware
+symlinks and special nodes. Fail on malformed data rather than clamping ranges.
 
-    def can_decode(self, input) -> bool:
-        ...  # usually a magic/superblock probe; see ext4.py for an
-             # example that has to check two possible superblock offsets
+Nested unpacking uses content detection automatically. A format does not add
+child dispatch rules to shared code or need to know which other formats exist.
 
-    def open_filesystem(self, data: bytes):
-        ...  # return whatever object your list_paths/read_file want
+## Add fixtures
 
-    def list_paths(self, fs) -> list[str]:
-        ...  # every regular file's full path; skip symlinks — nothing to
-             # decompile independently, see ext4.py's rationale
+Create directories under `tests/fixtures/`, each with a sample and
+`expected.json`. Both the Rust fixture runner and Python bridge runner discover
+native fixtures automatically; the Binary Ninja runner uses the same data.
 
-    def read_file(self, fs, path: str) -> bytes:
-        ...
-
-
-MyFilesystem.register()
+```json
+{
+  "native_format": "vendor_image",
+  "sample": "sample.bin",
+  "children": {
+    "payload.bin": {"length": 4, "sha256": "<independently computed hash>"}
+  }
+}
 ```
 
-## 4. Struct layouts: verify, don't guess
+Add at least one valid fixture and one corrupt/truncated fixture:
 
-A wrong byte offset in a firmware parser is a silent-wrong-answer failure
-mode, not a crash — it produces plausible-looking garbage. Before writing
-`parse_entries`/`read_file`, in priority order:
-
-1. If you have a real sample of the format, hex-dump it and cross-check
-   your field offsets against multiple real entries (not just one) —
-   e.g. does `entry[i].offset + entry[i].size == entry[i+1].offset` where
-   you'd expect contiguity? `ext4.py` and `shannon_toc.py` were both
-   validated this way against real Pixel/Tensor firmware.
-2. If a public reference implementation exists, read its actual source
-   (not just docs/blog posts describing it) and note what you checked it
-   against in your module docstring, including its license.
-3. If you can do neither, say so explicitly in the docstring rather than
-   presenting a guessed layout as settled — see the caution in
-   `shannon_toc.py`'s docstring for the tone to match.
-
-**A fourth option, when a permissively-licensed (MIT/BSD/Apache) reference
-implementation exists in a form you can actually call:** vendor it
-verbatim into `third_party/<project>/` rather than re-deriving its logic.
-`formats/boot_image.py` does this with AOSP's own `unpack_bootimg.py` —
-see `third_party/aosp_mkbootimg/NOTICE.md` for the provenance-tracking
-pattern (fetch the file unmodified, note the exact source URL/commit and
-license, never hand-edit it — re-fetch wholesale if it needs to change).
-This only works when the reference is something you can realistically
-call (a self-contained script, ideally), not when it's deeply
-disk-I/O-oriented C with no Python bindings — `erofs.py` hit that wall
-with `erofs-utils` and ported the algorithm by hand instead (still reading
-the real MIT-available source for the exact logic, just not vendoring it
-as a callable dependency). Use your judgment; note which path you took
-and why in the module docstring either way.
-
-## 5. Security — every input here is a third-party firmware blob
-
-- Never build a filesystem path or child name directly from a
-  container-supplied string — go through `common/sanitize.py`
-  (`OffsetTableContainer`/`FilesystemContainer` already do this for you;
-  only relevant if you're writing `perform_decode_with_context` by hand).
-- Never slice/read using an offset or size from the file without checking
-  it against the buffer's actual length first. `BinStruct.unpack_from`
-  and the base classes' entry extraction already do this — don't
-  reimplement raw `struct.unpack_from` calls with unchecked offsets
-  outside of them.
-- Prefer failing loudly (`raise`, which the base class turns into
-  `TransformResult.TransformFailure`) over guessing/truncating/clamping
-  silently.
-
-## 6. Tests — add a fixture, not a test function
-
-Testing is data-driven (`tests/test_formats.py`): every directory under
-`tests/fixtures/` with a `sample.*` + `expected.json` gets run through
-`TransformSession` automatically. Add a new format's test coverage by
-adding a fixture directory, built with a small throwaway script (see any
-existing `tests/fixtures/*/` for the shape of `expected.json` — a map of
-expected child name to `length`/`sha256`, or `"expect_failure": true` for
-a fixture that should fail cleanly). Keep samples minimal and synthetic —
-don't check in real multi-megabyte firmware images; validate against real
-samples locally during development, but the committed fixture is a
-from-scratch minimal file exercising the same code paths.
-
-Run the suite:
-
-```bash
-./scripts/run_tests.sh -v
+```json
+{
+  "native_format": "vendor_image",
+  "sample": "sample.bin",
+  "expect_failure": true
+}
 ```
 
-(needs a licensed local Binary Ninja install; see `scripts/run_tests.sh`
-for the `BN_APP` environment variable if yours isn't at the default path,
-and run `python3 -m venv .venv && .venv/bin/pip install pytest` once first.)
+The Rust runner requires both kinds for every registered format. Child records
+can contain `children` to verify nested archives. Set `transform` to the native
+transform name only when Binary Ninja also offers a competing decoder (TRX is
+an example). Keep fixtures small. Prefer official producers; record exact tool
+versions/commands. Verify real firmware locally without committing vendor blobs.
+Expected bytes/hashes must come from inputs or an independent reference tool,
+rather than this parser's output. Format-specific mutation tests can live in
+an inline `#[cfg(test)] mod tests` in the new module.
 
-## 7. Checklist
+## Check the result
 
-- [ ] one new file under `formats/`
-- [ ] `MAGIC` declared, or a justified custom `can_decode`
-- [ ] subclasses `OffsetTableContainer`/`FilesystemContainer`, or the
-      architecture agent signed off on doing it by hand
-- [ ] struct layout verified against a real sample and/or a named,
-      licensed reference — not guessed
-- [ ] `.register()` call at module level (not inside a function)
-- [ ] fixture added under `tests/fixtures/` — happy path plus at least
-      one corrupt/truncated case
-- [ ] `./scripts/run_tests.sh` passes
+```sh
+cargo test --locked
+cargo build --release --locked
+python3 -m unittest discover -s native/tests -v
+cargo clippy --all-targets -- -D warnings
+BN_DISABLE_USER_PLUGINS=1 ./scripts/run_tests.sh -q --confcutdir=tests
+```
+
+The final command needs a licensed Binary Ninja installation. Restart/reload
+the plugin after rebuilding the native library. The optional
+`python3 scripts/check_format_extension.py` proves the extension contract in
+an isolated copy: it adds the example module and fixtures, and checks generated
+registration, the Rust fixture runner, Python detection/extraction, and CLI.
+It never edits the working source or replaces its library.
+
+## Architecture boundaries
+
+There is one native Binary Ninja detection callback, regardless of format
+count. Named adapters for explicit selection are generated from Rust metadata.
+The C ABI uses stable string IDs and opaque reader handles; it has no
+format-specific functions. The CLI recursively extracts every recognized
+format, using sibling `<member>.unpacked/` directories and `.ffe-paths.tsv`
+mappings. It limits recursion to 16 nested layers, 100,000 extracted files,
+and 4 GiB total output. Files that collide by case receive suffixes.
+
+The registry test exercises 1,000 descriptors and checks that only the matching
+candidate's probe runs. This verifies candidate selection, not a performance
+claim for 1,000 fully implemented parsers. Shared capabilities should grow only
+when multiple formats need them; adding a parser does not require a shared
+change by default.
+
+Existing Python implementations under `formats/` remain supported during
+migration and still auto-import. DTBO and SquashFS retain their Python fallback
+when the native library is absent. New unpackers should follow the Rust path.
