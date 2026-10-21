@@ -36,6 +36,7 @@ from __future__ import annotations
 
 from ..common.binstruct import BinStruct, cstr
 from ..common.container_base import Entry, OffsetTableContainer
+from ..common.native import formats
 
 MAGIC = b"TOC\x00"
 _BOOT_TRIM = 512 + 4 * 4
@@ -80,4 +81,5 @@ class ShannonTOC(OffsetTableContainer):
         return _parse_entries(data)
 
 
-ShannonTOC.register()
+if not any(info["id"] == "shannon_toc" for info in formats()):
+    ShannonTOC.register()
