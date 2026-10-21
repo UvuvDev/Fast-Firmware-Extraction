@@ -11,7 +11,7 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 - **Dtbo** — DTBO / DT Table Image
 - **Qcdt** — Qualcomm Device Tree Table (QCDT v1/v2/v3, Rust)
 - **QcomMbn** — Qualcomm Legacy MBN Firmware Header (Rust)
-- **ShannonTOC** — Samsung Shannon Baseband TOC
+- **ShannonTOC** — Samsung Shannon Baseband TOC (Rust)
 - **UnisocMECP** — Unisoc CP memory-decoupling modem image
 - **FwTypeHeader** — Vendor fw-type Header
 - **Gpt** — GUID Partition Table (GPT)

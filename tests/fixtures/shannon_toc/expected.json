@@ -9,5 +9,6 @@
       "length": 17,
       "sha256": "d72ccadf028e6771c7e15af5ad574f4cc45a6c0b73b13aaeef44d6561826dcf4"
     }
-  }
+  },
+  "native_format": "shannon_toc"
 }
