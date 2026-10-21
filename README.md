@@ -20,6 +20,7 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 - **Erofs** — EROFS filesystem (uncompressed, Rust)
 - **F2fs** — F2FS filesystem
 - **Squashfs** — SquashFS filesystem
+- **Ubifs** — UBIFS committed filesystem, none/raw DEFLATE (Rust)
 - **Ubi** — UBI flash image (Rust)
 - **NetgearChk** — NETGEAR CHK firmware wrapper (Rust)
 - **Trx** — Broadcom TRX v1/v2 partitions with CRC32 verification (Rust)
@@ -140,3 +141,8 @@ regular files and skip symlinks and special nodes.
 Samsung PIT exposes each named partition's raw 132-byte descriptor. A standalone
 PIT contains no partition payloads; device geometry and obsolete file offsets
 are never used to carve imaginary contents.
+
+UBIFS checks node CRCs and reconstructs the committed index with uncompressed
+or raw DEFLATE data. Dirty/diverging masters, journal replay, authentication,
+LZO and ZSTD are unsupported. DEFLATE uses pure Rust `miniz_oxide`; each data
+node expands to at most 4 KiB. UBI volumes chain into UBIFS automatically.
