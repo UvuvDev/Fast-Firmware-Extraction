@@ -1,11 +1,4 @@
-"""Registers every firmware container format with Binary Ninja.
-
-Adding a new format is one new file under ``formats/`` — never edit this
-file. Every module under ``formats/`` gets imported, and each format
-registers itself at import time via a module-level ``SomeTransform.register()``
-call (see docs/ADDING_A_FORMAT.md).
-"""
-
+"""Discover legacy Python modules and register the generated Rust inventory."""
 from __future__ import annotations
 
 import importlib
@@ -20,3 +13,6 @@ def _register_all() -> None:
 
 
 _register_all()
+
+from .common.native_container import register_formats
+register_formats()

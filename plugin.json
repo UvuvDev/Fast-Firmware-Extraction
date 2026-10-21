@@ -8,7 +8,7 @@
         "python3"
     ],
     "description": "Container Browser support for embedded/mobile firmware container formats — Pixel/Tensor vendor blobs (FBPACK, ext4, EROFS, Shannon baseband TOC, Android boot images) and beyond, built to scale to hundreds of formats with one small file each.",
-    "longdescription": "Adds Container Browser transforms for firmware container/filesystem formats that Binary Ninja's core does not already parse. Started with Pixel/Tensor vendor firmware (FBPACK v1/v2, ext4, EROFS, Samsung Shannon baseband TOC, Android boot/vendor_boot images, DTBO, Android Sparse Image, self-extracting vendor-blob shell wrappers) and is designed to grow into other embedded-firmware ecosystems (e.g. UBI/UBIFS/SquashFS-based router and IoT firmware) without touching existing formats — see PROPOSAL.md and docs/ADDING_A_FORMAT.md. Pure Python, no external tool or GPL dependency required.",
+    "longdescription": "Adds Container Browser transforms for firmware container/filesystem formats, including Pixel/Tensor images and router firmware. A Rust backend handles DTBO, NETGEAR CHK, Broadcom TRX, LZMA-alone and SquashFS v4/XZ, including the complete R7000 extraction chain. Build it with cargo build --release; other formats remain Python. No external extraction program is required at runtime. See README.md and docs/ADDING_A_FORMAT.md.",
     "license": {
         "name": "MIT",
         "text": "See LICENSE"

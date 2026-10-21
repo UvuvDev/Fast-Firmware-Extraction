@@ -2,6 +2,9 @@
 universally for router/IoT/embedded root filesystems (found here as the
 `rootfs` volume inside a UBI image, see `ubi.py`).
 
+When the native backend is built, parsing and extraction use Rust/backhand.
+The implementation below is retained as the Python fallback when it is absent.
+
 Scoped to **SquashFS 4.0 with XZ compression** (`compression == 4` in the
 superblock) — the only variant validated against a real sample so far
 (the router firmware this plugin was built against). Other compression
@@ -40,6 +43,7 @@ import struct
 from dataclasses import dataclass
 
 from ..common.container_base import FilesystemContainer
+from ..common.native import formats
 
 MAGIC = b"hsqs"
 _SUPERBLOCK_FORMAT = "<4sIIIIHHHHHHQQQQQQQQ"
@@ -331,4 +335,5 @@ class Squashfs(FilesystemContainer):
         return fs.read_file_content(fs.resolve(path))
 
 
-Squashfs.register()
+if not any(info["id"] == "squashfs" for info in formats()):
+    Squashfs.register()

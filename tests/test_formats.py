@@ -44,6 +44,8 @@ def test_format_fixture(fixture_dir: Path) -> None:
 
     session = TransformSession(str(sample_path))
     session.set_interactive(False)
+    if transform := expected.get("transform"):
+        session.root_context.set_transform_name(transform)
     session.process()
     root = session.root_context
 
@@ -53,17 +55,23 @@ def test_format_fixture(fixture_dir: Path) -> None:
         )
         return
 
-    assert root.children, f"{fixture_dir.name}: expected children but got none"
+    _check_children(root, expected["children"], fixture_dir.name)
+
+
+def _check_children(root, expected_children, label):
+    assert root.children, f"{label}: expected children but got none"
 
     by_name = {c.filename: c for c in root.children}
-    assert set(by_name) == set(expected["children"]), (
-        f"{fixture_dir.name}: child set mismatch, got {sorted(by_name)}, want {sorted(expected['children'])}"
+    assert set(by_name) == set(expected_children), (
+        f"{label}: child set mismatch, got {sorted(by_name)}, want {sorted(expected_children)}"
     )
 
-    for name, info in expected["children"].items():
+    for name, info in expected_children.items():
         child = by_name[name]
         content = bytes(child.input.read(0, child.input.length))
         if "length" in info:
-            assert len(content) == info["length"], f"{fixture_dir.name}/{name}: length mismatch"
+            assert len(content) == info["length"], f"{label}/{name}: length mismatch"
         if "sha256" in info:
-            assert hashlib.sha256(content).hexdigest() == info["sha256"], f"{fixture_dir.name}/{name}: content mismatch"
+            assert hashlib.sha256(content).hexdigest() == info["sha256"], f"{label}/{name}: content mismatch"
+        if "children" in info:
+            _check_children(child, info["children"], f"{label}/{name}")
