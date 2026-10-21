@@ -47,6 +47,7 @@ import struct
 from dataclasses import dataclass
 
 from ..common.container_base import FilesystemContainer
+from ..common.native import formats
 
 MAGIC = b"UBI#"
 _VID_MAGIC = b"UBI!"
@@ -167,4 +168,5 @@ class Ubi(FilesystemContainer):
         return fs.read_volume(vol_id)
 
 
-Ubi.register()
+if not any(info["id"] == "ubi" for info in formats()):
+    Ubi.register()
