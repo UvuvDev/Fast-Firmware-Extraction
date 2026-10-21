@@ -10,7 +10,7 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 - **AndroidSelfExtract** — Android self-extracting vendor blob (Rust)
 - **Dtbo** — DTBO / DT Table Image
 - **Qcdt** — Qualcomm Device Tree Table (QCDT v1/v2/v3, Rust)
-- **QcomMbn** — Qualcomm Legacy MBN Firmware Header
+- **QcomMbn** — Qualcomm Legacy MBN Firmware Header (Rust)
 - **ShannonTOC** — Samsung Shannon Baseband TOC
 - **UnisocMECP** — Unisoc CP memory-decoupling modem image
 - **FwTypeHeader** — Vendor fw-type Header
@@ -31,8 +31,9 @@ are automatic. See [the contributor guide](docs/ADDING_A_FORMAT.md) and
 
 ## Rust unpacking
 
-The Rust core handles **FBPK v1/v2**, **Android sparse**, **Android boot/vendor boot**, **self-extracting vendor blobs**, **DTBO / ACPIO** and the complete **NETGEAR R7000**
-chain: **CHK → TRX → LZMA kernel + SquashFS v4/XZ filesystem**. CHK/TRX
+The formats marked Rust above share one native core. It also handles the
+complete **NETGEAR R7000** chain:
+**CHK → TRX → LZMA kernel + SquashFS v4/XZ filesystem**. CHK/TRX
 parsers validate bounds, and TRX verifies CRC32. LZMA has dictionary and
 output limits; SquashFS exposes regular files and skips symlinks/specials.
 Tests run without Python or Binary Ninja:

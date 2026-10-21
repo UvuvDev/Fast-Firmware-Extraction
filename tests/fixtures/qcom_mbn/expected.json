@@ -13,5 +13,6 @@
       "length": 23,
       "sha256": "35ba42878ad92959c575d826614d769415121f6b2a980bc6d26519dc3f402cd2"
     }
-  }
+  },
+  "native_format": "qcom_mbn"
 }

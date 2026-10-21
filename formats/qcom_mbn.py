@@ -59,6 +59,7 @@ from __future__ import annotations
 
 from ..common.binstruct import BinStruct
 from ..common.container_base import Entry, OffsetTableContainer
+from ..common.native import formats
 
 _FLASH_CODE_WORD = 0x844BDCD1
 _MAGIC_NUM = 0x73D71034
@@ -97,4 +98,5 @@ class QcomMbn(OffsetTableContainer):
         ]
 
 
-QcomMbn.register()
+if not any(info["id"] == "qcom_mbn" for info in formats()):
+    QcomMbn.register()
