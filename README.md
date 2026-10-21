@@ -13,7 +13,7 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 - **QcomMbn** — Qualcomm Legacy MBN Firmware Header (Rust)
 - **ShannonTOC** — Samsung Shannon Baseband TOC (Rust)
 - **UnisocMECP** — Unisoc CP memory-decoupling modem image
-- **FwTypeHeader** — Vendor fw-type Header
+- **FwTypeHeader** — Vendor fw-type Header (Rust)
 - **Gpt** — GUID Partition Table (512-byte sectors, Rust)
 - **Ext4** — ext4 filesystem
 - **Erofs** — EROFS filesystem
