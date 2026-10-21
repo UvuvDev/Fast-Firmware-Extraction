@@ -1,4 +1,6 @@
 {
   "sample": "sample.img",
-  "expect_failure": true
+  "expect_failure": true,
+  "native_format": "gpt",
+  "transform": "Gpt"
 }
