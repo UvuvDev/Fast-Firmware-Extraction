@@ -46,6 +46,7 @@ from typing import Optional
 from binaryninja import log_error
 
 from ..common.container_base import FilesystemContainer
+from ..common.native import formats
 
 _MAGIC_OFFSET = 0x38
 _EXT4_MAGIC = 0xEF53
@@ -369,4 +370,5 @@ class Ext4(FilesystemContainer):
         return fs.read_file_content(inode)
 
 
-Ext4.register()
+if not any(info["id"] == "ext4" for info in formats()):
+    Ext4.register()
