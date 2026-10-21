@@ -23,6 +23,8 @@ from typing import Optional
 
 from binaryninja import Transform, TransformCapabilities, TransformType, log_error
 
+from ..common.native import formats
+
 MAGIC = b"\x3a\xff\x26\xed"  # 0xed26ff3a, as it appears on disk (little-endian)
 
 _HEADER_FORMAT = "<IHHHHIIII"
@@ -108,4 +110,5 @@ class SparseImage(Transform):
         return None
 
 
-SparseImage.register()
+if not any(info["id"] == "sparse_image" for info in formats()):
+    SparseImage.register()
