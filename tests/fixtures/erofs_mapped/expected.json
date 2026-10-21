@@ -1,0 +1,14 @@
+{
+  "native_format": "erofs",
+  "sample": "sample.img",
+  "children": {
+    "chunked.bin": {
+      "length": 1124,
+      "sha256": "fea5b3694a42711beb0d6a8d7fa668569dfa674dacfce4b9f29931d7cd6b814c"
+    },
+    "nested/extended.bin": {
+      "length": 600,
+      "sha256": "411de424aa2db318c26af0644e359ca350fa593ddaf437a7bedb8ed875d4a8ba"
+    }
+  }
+}

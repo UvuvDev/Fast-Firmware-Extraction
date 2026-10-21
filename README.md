@@ -16,7 +16,7 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 - **FwTypeHeader** — Vendor fw-type Header (Rust)
 - **Gpt** — GUID Partition Table (512-byte sectors, Rust)
 - **Ext4** — ext4 filesystem (Rust)
-- **Erofs** — EROFS filesystem
+- **Erofs** — EROFS filesystem (uncompressed, Rust)
 - **F2fs** — F2FS filesystem
 - **Squashfs** — SquashFS filesystem
 - **Ubi** — UBI flash image (Rust)
@@ -130,3 +130,8 @@ Ext4 supports standard/padless superblocks, extent trees, direct through
 triple-indirect mappings, sparse/unwritten blocks, and small inline files.
 Inline directories/xattr overflow, journal replay, meta_bg, encryption, casefold,
 and checksum verification are outside the current implementation.
+
+EROFS handles flat files, inline tails, compact/extended inodes and single-device
+chunk mappings. Compressed inodes, metabox, global 48BIT addressing, multiple
+devices and checksum verification remain unsupported. Filesystem readers expose
+regular files and skip symlinks and special nodes.
