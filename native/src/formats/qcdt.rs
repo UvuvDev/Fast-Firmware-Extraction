@@ -13,6 +13,8 @@ pub const FORMAT: FormatDescriptor = FormatDescriptor {
     signatures: &[Signature::new(0, b"QCDT")],
     probe: None,
     open,
+    max_input_size: None,
+    max_file_size: None,
 };
 
 fn open(data: Vec<u8>) -> Result<Box<dyn ArchiveReader>> {
