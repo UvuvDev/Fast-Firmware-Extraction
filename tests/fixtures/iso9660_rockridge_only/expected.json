@@ -1,0 +1,18 @@
+{
+  "sample": "sample.iso",
+  "native_format": "iso9660",
+  "children": {
+    "small.txt": {
+      "length": 59,
+      "sha256": "df62a7dc724cfef85cd7ac6b2984004256647848b94f8430c1edf185de50ebec"
+    },
+    "subdir/nested.txt": {
+      "length": 99,
+      "sha256": "a28a2cbe6e81b1645fc76c781926e3bf42e0f62a53470b7dd0e18e4a84d95013"
+    },
+    "big.bin": {
+      "length": 9000,
+      "sha256": "16165bc66a50fcaa1e33af6ea86b1a4ec7baf3ffba93786047f3d467a4d738b0"
+    }
+  }
+}
