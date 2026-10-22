@@ -10,8 +10,14 @@ use std::path::Path;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 const MAX_DEPTH: usize = 16;
-const MAX_OUTPUT: u64 = 4 * 1024 * 1024 * 1024;
-const MAX_FILES: usize = 100_000;
+// A full OS/distro ISO recursed into its nested (and often decompressed
+// larger than compressed) squashfs/erofs filesystems routinely produces
+// tens of GiB and six-figure file counts; 4 GiB/100,000 files was sized
+// for firmware partitions, not that. 64 GiB / 1,000,000 files (matching
+// the existing MAX_MEMBERS per-archive cap) still bounds a pathological
+// decompression bomb while fitting a real desktop Linux live image.
+const MAX_OUTPUT: u64 = 64 * 1024 * 1024 * 1024;
+const MAX_FILES: usize = 1_000_000;
 
 fn write_new(path: &Path, data: &[u8]) -> Result<()> {
     if let Some(parent) = path.parent() {
@@ -87,6 +93,9 @@ fn extract(archive: Archive, output: &Path, depth: usize, budget: &mut Budget) -
     if depth > MAX_DEPTH {
         return Err("recursive extraction exceeds depth limit".into());
     }
+    if !archive.diagnostics().is_empty() {
+        eprintln!("{}", archive.diagnostics());
+    }
     fs::create_dir(output)?;
     let mut paths = Paths::default();
     let manifest = paths.allocate(".ffe-paths.tsv", false);
@@ -102,19 +111,29 @@ fn extract(archive: Archive, output: &Path, depth: usize, budget: &mut Budget) -
         let actual = paths.allocate(name, false);
         write_new(&output.join(&actual), &data)?;
         let nested = registry::detect(&data);
+        let mut recursed_as = "";
         let directory = if let Some(format) = nested {
             let directory = paths.generated_directory(&format!("{actual}.unpacked"));
-            let child = Archive::open(format.id, data)
-                .map_err(|error| format!("{name} ({}): {error}", format.id))?;
-            extract(child, &output.join(&directory), depth + 1, budget)?;
-            directory
+            match Archive::open(format.id, data) {
+                Ok(child) => {
+                    extract(child, &output.join(&directory), depth + 1, budget)?;
+                    recursed_as = format.id;
+                    directory
+                }
+                // A detected-but-unopenable nested format (an unsupported
+                // sub-feature, or genuine corruption) must not abort
+                // extraction of everything else in this archive: the
+                // opaque file is already written above, so just leave it
+                // un-recursed-into rather than losing the whole run over it.
+                Err(error) => {
+                    eprintln!("{name} ({}): {error}", format.id);
+                    String::new()
+                }
+            }
         } else {
             String::new()
         };
-        mapping.push_str(&format!(
-            "{name}\t{actual}\t{}\t{directory}\n",
-            nested.map_or("", |format| format.id)
-        ));
+        mapping.push_str(&format!("{name}\t{actual}\t{recursed_as}\t{directory}\n"));
     }
     write_new(&output.join(manifest), mapping.as_bytes())?;
     Ok(())
@@ -133,7 +152,7 @@ fn run() -> Result<()> {
     }
     let mut input = Vec::new();
     fs::File::open(&args[1])?
-        .take(firmware_unpack::archive::MAX_INPUT_SIZE as u64 + 1)
+        .take(registry::max_input_size() as u64 + 1)
         .read_to_end(&mut input)?;
     let archive = Archive::open_auto(input)?;
     let mut budget = Budget::default();

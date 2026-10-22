@@ -73,6 +73,15 @@ pub struct FormatDescriptor {
     /// errors must propagate from open, never trigger another decoder.
     pub probe: Option<fn(&[u8]) -> bool>,
     pub open: fn(Vec<u8>) -> Result<Box<dyn ArchiveReader>>,
+    /// Overrides `crate::archive::MAX_INPUT_SIZE` for this format only, for
+    /// a container that routinely exceeds it legitimately (e.g. ISO 9660
+    /// optical/install images). `None` keeps the crate-wide default.
+    pub max_input_size: Option<usize>,
+    /// Overrides `crate::archive::MAX_FILE_SIZE` for this format only, for
+    /// a container whose individual members routinely exceed it legitimately
+    /// (e.g. a multi-GiB squashfs inside an ISO 9660 image). `None` keeps
+    /// the crate-wide default.
+    pub max_file_size: Option<usize>,
 }
 
 struct Index<'a> {
@@ -234,6 +243,20 @@ pub fn detect(data: &[u8]) -> Option<&'static FormatDescriptor> {
 pub(crate) fn detect_index(data: &[u8]) -> Option<usize> {
     detect(data).map(|format| index().ids[format.id])
 }
+/// The largest input a caller might legitimately need to hand in, across
+/// every registered format's own override (or the crate-wide default if
+/// none overrides it). Used only as an outer sanity bound before the
+/// specific format is known (the FFI boundary, the CLI's file read); the
+/// per-format limit in `Archive::open_format` is the one actually enforced
+/// once the format is.
+pub fn max_input_size() -> usize {
+    formats()
+        .iter()
+        .filter_map(|format| format.max_input_size)
+        .chain([crate::archive::MAX_INPUT_SIZE])
+        .max()
+        .unwrap()
+}
 
 #[cfg(test)]
 mod tests {
@@ -266,6 +289,8 @@ mod tests {
                 signatures,
                 probe: Some(probe),
                 open: unused,
+                max_input_size: None,
+                max_file_size: None,
             });
         }
         let index = Index::new(&formats);
@@ -296,6 +321,8 @@ mod tests {
                 signatures,
                 probe: Some(embedded_probe),
                 open: unused,
+                max_input_size: None,
+                max_file_size: None,
             });
         }
         let index = Index::new(&formats);
@@ -316,6 +343,8 @@ mod tests {
                 signatures: &[Signature::new(0, b"WRAP")],
                 probe: None,
                 open: unused,
+                max_input_size: None,
+                max_file_size: None,
             },
             FormatDescriptor {
                 id: "child",
@@ -324,6 +353,8 @@ mod tests {
                 signatures: &[Signature::embedded(b"LONG_CHILD_MAGIC")],
                 probe: None,
                 open: unused,
+                max_input_size: None,
+                max_file_size: None,
             },
         ];
         let index = Index::new(FORMATS);
@@ -345,6 +376,8 @@ mod tests {
             signatures: &[Signature::embedded(b"EMBD")],
             probe: None,
             open: unused,
+                max_input_size: None,
+                max_file_size: None,
         }];
         let index = Index::new(FORMATS);
         let mut data = vec![0xa5; PROBE_LIMIT - 4];
@@ -369,5 +402,17 @@ mod tests {
     #[should_panic(expected = "duplicate format ID")]
     fn duplicate_ids_are_rejected() {
         Index::new(&[crate::formats::dtbo::FORMAT, crate::formats::dtbo::FORMAT]);
+    }
+
+    #[test]
+    fn max_input_size_reflects_the_largest_format_override() {
+        // iso9660 overrides the crate-wide default upward (real optical/
+        // install images routinely exceed 1 GiB); the registry-wide bound
+        // every caller sees before a format is known must reflect that.
+        assert!(crate::formats::iso9660::FORMAT.max_input_size.unwrap() > crate::archive::MAX_INPUT_SIZE);
+        assert_eq!(
+            max_input_size(),
+            crate::formats::iso9660::FORMAT.max_input_size.unwrap()
+        );
     }
 }
