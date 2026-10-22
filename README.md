@@ -224,9 +224,13 @@ RUBINMIPS/DYNRUBIN/LZO/LZMA compressors are not. See
 AndroidSuperImage reads liblp's geometry block and metadata slot 0 (falling
 back from the primary copy to its backup if the primary's SHA-256 checksum
 doesn't validate), then assembles each named partition from its LINEAR
-(byte range on the backing device) and ZERO (hole) extents. Only a single
-backing block device is supported, i.e. not a "retrofit" device whose
-dynamic partitions are split across separate physical super_a/super_b
-devices; other metadata slots' redundant copies and partition group quotas
-are not inspected. See
+(byte range on a backing block device) and ZERO (hole) extents, across any
+number of block devices. "Retrofit" devices, whose dynamic partitions are
+split across separate physical super_a/super_b images with no single
+combined file, are supported by feeding this format the **concatenation**
+of every device's own backing file, metadata-holding device first (e.g.
+`cat super_super_a.img super_super_b.img > combined.img`) -- a real
+partition's extents can reference more than one device this way. Other
+metadata slots' redundant copies and partition group quotas are not
+inspected. See
 [Android super.img fixture provenance](tests/fixture_sources/android_super/README.md).
