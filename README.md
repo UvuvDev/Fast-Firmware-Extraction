@@ -8,6 +8,7 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 - **AndroidBootImage** — Android Boot / Vendor Boot Image (Rust)
 - **AndroidSparse** — Android Sparse Image (Rust)
 - **AndroidSelfExtract** — Android self-extracting vendor blob (Rust)
+- **AndroidSuperImage** — Android super partition / dynamic partitions (liblp, Rust)
 - **Dtbo** — DTBO / DT Table Image (Rust)
 - **Qcdt** — Qualcomm Device Tree Table (QCDT v1/v2/v3, Rust)
 - **QcomMbn** — Qualcomm Legacy MBN Firmware Header (Rust)
@@ -32,6 +33,7 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 - **UBootFit** — U-Boot Flattened Image Tree (FIT) devicetree images (Rust)
 - **CpioNewc** — CPIO "newc" (070701) archives, e.g. Linux initramfs (Rust)
 - **Cramfs** — CramFS filesystem, zlib-compressed (Rust)
+- **Jffs2** — JFFS2 flash filesystem, little-endian (Rust)
 
 Add a new unpacker with **one Rust module under `native/src/formats/` plus
 fixtures**. Build discovery, Python registration, and recursive CLI dispatch
@@ -65,7 +67,7 @@ available without the library; Rust-only formats require the native build. A pre
 a Rust parse error is reported as a failure. Use the default Cargo target
 directory when building for the plugin. CHK, TRX and LZMA require the Rust
 library. Parsing/extraction runs in Rust; Python adapts Container Browser's
-discovery and file-selection protocol. All 28 current format modules have Rust
+discovery and file-selection protocol. All 30 current format modules have Rust
 implementations; legacy Python readers remain as fallbacks and parity references.
 
 The native build uses `backhand` (MIT/Apache-2.0) with XZ enabled, statically
@@ -205,3 +207,26 @@ regardless of the advisory HOLES flag; any other flag bit, including the
 legacy pre-FSID_VERSION_2 superblock, SHIFTED_ROOT_OFFSET, or
 WRONG_SIGNATURE, is rejected rather than guessed at. See
 [CramFS fixture provenance](tests/fixture_sources/cramfs/README.md).
+
+Jffs2 has no on-flash index: it scans every dirent/inode node in log order,
+keeping the highest "version" per (parent, name) (a dirent with target inode
+0 deletes that name) and per inode number, since a later version may cover
+only part of a file. Node CRCs use JFFS2's own CRC32 variant (reflected,
+seeded with 0, no final XOR), distinct from the zlib-compatible CRC32 this
+crate uses elsewhere for TRX/uImage; it is verified on every node, including
+each fragment's data CRC, eagerly during discovery, so corrupting a
+fragment's stored bytes (not just its decompressed form) is caught by
+open() alone. Only little-endian images and NONE/ZERO/COPY/ZLIB compression
+are supported; the legacy 0x1984 magic, big-endian images, and the RTIME/
+RUBINMIPS/DYNRUBIN/LZO/LZMA compressors are not. See
+[JFFS2 fixture provenance](tests/fixture_sources/jffs2/README.md).
+
+AndroidSuperImage reads liblp's geometry block and metadata slot 0 (falling
+back from the primary copy to its backup if the primary's SHA-256 checksum
+doesn't validate), then assembles each named partition from its LINEAR
+(byte range on the backing device) and ZERO (hole) extents. Only a single
+backing block device is supported, i.e. not a "retrofit" device whose
+dynamic partitions are split across separate physical super_a/super_b
+devices; other metadata slots' redundant copies and partition group quotas
+are not inspected. See
+[Android super.img fixture provenance](tests/fixture_sources/android_super/README.md).
