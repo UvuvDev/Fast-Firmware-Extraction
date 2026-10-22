@@ -29,6 +29,23 @@ module's own tests), geometry has no further fallback once it can't be read
 at all, so corrupting both copies is what actually leaves no way to parse
 the image, rather than just one.
 
+`android_super_retrofit/sample.img` is a "retrofit" layout: two separate
+physical block devices, `super_a` (65536 bytes, holds the metadata) and
+`super_b` (16384 bytes, pure headerless data), built with
+`--device=super_a:65536:4096 --device=super_b:16384:4096
+--super-name=super_a`. lpmake writes retrofit devices as **separate files**
+(`super_super_a.img`, `super_super_b.img` under an output directory) --
+there is no single-file retrofit super.img, from lpmake or on a real
+device. A third partition, `big`, is sized so its extents genuinely span
+both devices (56 sectors on `super_a`, 16 on `super_b`), which
+`lpdump`/`lpunpack -i outdir/super_super_b.img outdir/super_super_a.img`
+independently confirm. Since this parser's `open()` only ever takes one
+buffer, the committed fixture is the straight concatenation of
+`super_super_a.img` ++ `super_super_b.img` -- not a file any AOSP tool
+produces directly, but byte-for-byte what you'd get by preparing the two
+real device dumps the way the module doc comment describes. `provenance.json`'s
+`retrofit_*` keys record the separate commands and inputs this came from.
+
 `expected.json` lengths and SHA-256 hashes come from the original synthetic
 input files, independently of this plugin's parser. `provenance.json`
 records the exact commands, input hashes, the android-tools-lpmake package

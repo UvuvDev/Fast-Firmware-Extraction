@@ -8,12 +8,24 @@
 //! Apache-2.0 source is not vendored here, only the generated fixture bytes
 //! are committed.
 //!
-//! Only the single-block-device ("super") layout is supported, not
-//! "retrofit" devices whose dynamic partitions are split across separate
-//! physical super_a/super_b devices. Metadata slot 0 is read (the default
-//! every reader, including `lpdump`, uses without an explicit --slot); the
-//! primary copy is used if its checksums validate, else its backup copy.
-//! Partition group quotas are not exposed.
+//! Metadata slot 0 is read (the default every reader, including `lpdump`,
+//! uses without an explicit --slot); the primary copy is used if its
+//! checksums validate, else its backup copy. Partition group quotas are
+//! not exposed.
+//!
+//! "Retrofit" devices, whose dynamic partitions are split across separate
+//! physical super_a/super_b block devices, have no on-flash indication of
+//! which file is which: a real device dump is multiple files, with the
+//! metadata living only in the first one (the one named by --super-name at
+//! build time). This format never reads more than the one buffer it's
+//! given, so retrofit support means accepting the **concatenation** of
+//! every block device's own backing file, metadata-holding device first,
+//! in the same order liblp lists them in the block-device table -- e.g.
+//! `cat super_super_a.img super_super_b.img > combined.img`, confirmed
+//! against AOSP's own `lpunpack -i super_super_b.img super_super_a.img`,
+//! which takes exactly that set of files (just not concatenated). A single
+//! partition's extents can legitimately reference more than one device
+//! this way (see tests::reassembles_a_partition_that_spans_two_block_devices).
 use crate::archive::{ArchiveReader, MAX_FILE_SIZE, MAX_MEMBERS, Result, validate_name};
 use crate::bytes::{get, le32};
 use crate::registry::{FormatDescriptor, Signature};
@@ -156,9 +168,27 @@ fn open(data: Vec<u8>) -> Result<Box<dyn ArchiveReader>> {
     let metadata =
         parse_metadata_at(&data, primary).or_else(|_| parse_metadata_at(&data, backup))?;
 
-    if metadata.block_devices.count != 1 {
-        return Err("unsupported multi-device (retrofit) super image layout".into());
+    if metadata.block_devices.count == 0 || metadata.block_devices.count > MAX_MEMBERS {
+        return Err("invalid super image block device count".into());
     }
+    if metadata.block_devices.entry_size < 24 {
+        return Err("super image block device entry too small".into());
+    }
+    let block_devices_bytes = mul(metadata.block_devices.count, metadata.block_devices.entry_size)?;
+    let block_devices_table = get(&metadata.tables, metadata.block_devices.offset, block_devices_bytes)?;
+    // The base byte offset of each device within `data`, assuming `data`
+    // is the concatenation of every device's own backing file -- see the
+    // module doc comment. Device 0 (base 0) is always the file actually
+    // being read, since that's where the geometry/metadata we just parsed
+    // had to live.
+    let mut device_bases = Vec::with_capacity(metadata.block_devices.count);
+    let mut cumulative = 0_usize;
+    for entry in block_devices_table.chunks_exact(metadata.block_devices.entry_size) {
+        device_bases.push(cumulative);
+        let size = address(u64::from_le_bytes(entry[16..24].try_into().unwrap()))?;
+        cumulative = add(cumulative, size)?;
+    }
+
     let partitions_bytes = mul(metadata.partitions.count, metadata.partitions.entry_size)?;
     let partitions_table = get(&metadata.tables, metadata.partitions.offset, partitions_bytes)?;
     if metadata.partitions.entry_size < PARTITION_NAME_SIZE + 16 {
@@ -212,14 +242,11 @@ fn open(data: Vec<u8>) -> Result<Box<dyn ArchiveReader>> {
                 TARGET_LINEAR => {
                     let target_data =
                         address(u64::from_le_bytes(extent[12..20].try_into().unwrap()))?;
-                    let target_source = le32(extent, 20)?;
-                    if target_source != 0 {
-                        return Err(
-                            "super image extent references unsupported secondary block device"
-                                .into(),
-                        );
-                    }
-                    let start = mul(target_data, SECTOR_SIZE)?;
+                    let target_source = le32(extent, 20)? as usize;
+                    let base = *device_bases
+                        .get(target_source)
+                        .ok_or("super image extent references an unknown block device")?;
+                    let start = add(base, mul(target_data, SECTOR_SIZE)?)?;
                     let end = add(start, length)?;
                     get(&data, start, length)?; // validated eagerly, read lazily
                     extents.push(Extent::Linear(start..end));
@@ -295,5 +322,75 @@ mod tests {
         let mut names = archive.names().to_vec();
         names.sort();
         assert_eq!(names, ["system", "vendor"]);
+    }
+
+    const RETROFIT: &[u8] =
+        include_bytes!("../../../tests/fixtures/android_super_retrofit/sample.img");
+
+    #[test]
+    fn reassembles_a_partition_that_spans_two_block_devices() {
+        // RETROFIT is super_super_a.img ++ super_super_b.img concatenated
+        // (see the module doc comment and the fixture's own README); "big"
+        // is the one partition whose extents genuinely reference both.
+        let archive = Archive::open("android_super", RETROFIT.to_vec()).unwrap();
+        let mut names = archive.names().to_vec();
+        names.sort();
+        assert_eq!(names, ["big", "system", "vendor"]);
+        assert_eq!(archive.read_named("big").unwrap().len(), 36864);
+    }
+
+    #[test]
+    fn rejects_an_extent_referencing_an_unknown_block_device() {
+        use sha2::{Digest, Sha256};
+
+        let mut data = RETROFIT.to_vec();
+        let (metadata_max_size, slot_count) = super::geometry(&data, 4096).unwrap();
+        let primary = 4096 * 3;
+        let backup = primary + slot_count * metadata_max_size;
+
+        let header_size =
+            u32::from_le_bytes(data[primary + 8..primary + 12].try_into().unwrap()) as usize;
+        let tables_size =
+            u32::from_le_bytes(data[primary + 44..primary + 48].try_into().unwrap()) as usize;
+        let extents_descriptor = primary + 92;
+        let extents_offset =
+            u32::from_le_bytes(data[extents_descriptor..extents_descriptor + 4].try_into().unwrap())
+                as usize;
+        let extents_entry_size = u32::from_le_bytes(
+            data[extents_descriptor + 8..extents_descriptor + 12]
+                .try_into()
+                .unwrap(),
+        ) as usize;
+        let tables_start = primary + header_size;
+        let extents_start = tables_start + extents_offset;
+
+        // Find the "big" partition's extent that targets device 1
+        // (super_b) and point it at a device index that doesn't exist.
+        let mut target_source_field = None;
+        let mut entry_start = extents_start;
+        while entry_start + extents_entry_size <= tables_start + tables_size {
+            if u32::from_le_bytes(data[entry_start + 20..entry_start + 24].try_into().unwrap())
+                == 1
+            {
+                target_source_field = Some(entry_start + 20);
+                break;
+            }
+            entry_start += extents_entry_size;
+        }
+        let field = target_source_field.expect("fixture must have an extent on device 1");
+        data[field..field + 4].copy_from_slice(&99_u32.to_le_bytes());
+
+        // Recompute the primary slot's tables/header checksums, then
+        // replicate the whole fixed-up slot into the backup slot too --
+        // otherwise the parser would just fall back to the pristine backup.
+        let tables_checksum = Sha256::digest(&data[tables_start..tables_start + tables_size]);
+        data[primary + 48..primary + 80].copy_from_slice(&tables_checksum);
+        let mut header = data[primary..primary + header_size].to_vec();
+        header[12..44].fill(0);
+        let header_checksum = Sha256::digest(&header);
+        data[primary + 12..primary + 44].copy_from_slice(&header_checksum);
+        data.copy_within(primary..primary + metadata_max_size, backup);
+
+        assert!(Archive::open("android_super", data).is_err());
     }
 }
