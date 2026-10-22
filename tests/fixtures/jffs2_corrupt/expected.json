@@ -1,0 +1,5 @@
+{
+  "sample": "sample.img",
+  "native_format": "jffs2",
+  "expect_failure": true
+}
