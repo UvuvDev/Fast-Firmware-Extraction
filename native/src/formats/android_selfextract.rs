@@ -13,6 +13,8 @@ pub const FORMAT: FormatDescriptor = FormatDescriptor {
     signatures: &[Signature::new(0, b"#!")],
     probe: Some(probe),
     open,
+    max_input_size: None,
+    max_file_size: None,
 };
 
 // Python's bytes-regex \s includes vertical tab as well as the usual ASCII
