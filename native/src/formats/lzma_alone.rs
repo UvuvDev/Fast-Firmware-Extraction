@@ -11,6 +11,8 @@ pub const FORMAT: FormatDescriptor = FormatDescriptor {
     // then validate the dictionary and attempt a bounded prefix decode.
     signatures: &[Signature::byte_range(0, 0, 224)],
     probe: Some(probe_lzma), open,
+    max_input_size: None,
+    max_file_size: None,
 };
 fn open(data: Vec<u8>) -> Result<Box<dyn ArchiveReader>> {
     Ok(Box::new(RangeArchive::single("kernel.bin", decode_lzma(&data)?)?))
