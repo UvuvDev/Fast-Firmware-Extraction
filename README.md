@@ -33,6 +33,7 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 - **UBootFit** — U-Boot Flattened Image Tree (FIT) devicetree images (Rust)
 - **CpioNewc** — CPIO "newc" (070701) archives, e.g. Linux initramfs (Rust)
 - **Cramfs** — CramFS filesystem, zlib-compressed (Rust)
+- **Iso9660** — ISO 9660 optical disc image, Joliet/Rock Ridge (Rust)
 - **Jffs2** — JFFS2 flash filesystem, little-endian (Rust)
 
 Add a new unpacker with **one Rust module under `native/src/formats/` plus
@@ -67,7 +68,7 @@ available without the library; Rust-only formats require the native build. A pre
 a Rust parse error is reported as a failure. Use the default Cargo target
 directory when building for the plugin. CHK, TRX and LZMA require the Rust
 library. Parsing/extraction runs in Rust; Python adapts Container Browser's
-discovery and file-selection protocol. All 30 current format modules have Rust
+discovery and file-selection protocol. All 31 current format modules have Rust
 implementations; legacy Python readers remain as fallbacks and parity references.
 
 The native build uses `backhand` (MIT/Apache-2.0) with XZ enabled, statically
@@ -234,3 +235,14 @@ partition's extents can reference more than one device this way. Other
 metadata slots' redundant copies and partition group quotas are not
 inspected. See
 [Android super.img fixture provenance](tests/fixture_sources/android_super/README.md).
+
+Iso9660 reads one directory tree, picked in priority order: a Supplementary
+Volume Descriptor carrying the Joliet escape sequence (simple UTF-16BE
+names, used as-is), else the Primary Volume Descriptor's tree, preferring
+each record's Rock Ridge "NM" (POSIX name) entry when present, else its
+plain ISO 9660 name with the ";version" suffix stripped. Only a 2048-byte
+logical block size is supported; multi-extent records (files split across
+several directory records, generally only seen well past 4 GiB) and Rock
+Ridge continuation ("CE") entries are not. El Torito boot images and
+multiple sessions are not inspected. See
+[ISO 9660 fixture provenance](tests/fixture_sources/iso9660/README.md).
