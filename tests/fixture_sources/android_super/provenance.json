@@ -1,0 +1,57 @@
+{
+  "docker_image": "alpine:latest",
+  "android_tools_lpmake_version": "android-tools-lpmake-35.0.2-r21",
+  "commands": [
+    [
+      "img2simg",
+      "system.img",
+      "system.simg"
+    ],
+    [
+      "img2simg",
+      "vendor.img",
+      "vendor.simg"
+    ],
+    [
+      "lpmake",
+      "-d",
+      "65536",
+      "-m",
+      "4096",
+      "-s",
+      "1",
+      "--alignment=4096",
+      "-p",
+      "system:none:8192",
+      "-p",
+      "vendor:none:8192",
+      "-i",
+      "system=system.simg",
+      "-i",
+      "vendor=vendor.simg",
+      "-F",
+      "-o",
+      "super.img"
+    ],
+    [
+      "lpunpack",
+      "super.img",
+      "unpacked"
+    ],
+    [
+      "lpdump",
+      "super.img"
+    ]
+  ],
+  "inputs": {
+    "system.img": "23f5ebcd159b8c998d2bf55ea7b3b12deaae5806326191415937ca0a1e57d3b0",
+    "vendor.img": "e295e2e6c751322cbd634cb0ead9fba79a46c676dec816b9e3c1669c95539a4a"
+  },
+  "corrupt_field": "one byte flipped in each geometry copy's magic (offsets 4096 and 8192)",
+  "artifacts": {
+    "tests/fixtures/android_super/sample.img": "bdbe255a4807f8e6280cb2000a9a1cf11cc7c930c96b573a51d068b5040f8deb",
+    "tests/fixtures/android_super/expected.json": "ed4b16e5b3cfc0136a9c73c73df1f447c8b12fe9813ebea66fe8367a2eeeea71",
+    "tests/fixtures/android_super_corrupt/sample.img": "c6b2e428499a128caaad1a6da73cf09d4955354c6418a041283f885b2639e41e",
+    "tests/fixtures/android_super_corrupt/expected.json": "ecf5ac9fa9bf57483f20c17ed77ee62be8af6a36819505d14cf9c148ad8e5158"
+  }
+}
