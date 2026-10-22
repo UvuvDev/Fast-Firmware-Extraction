@@ -14,7 +14,7 @@
 //! (including SHIFTED_ROOT_OFFSET or WRONG_SIGNATURE) is rejected rather than
 //! guessed at. A zero-length block is read as a hole (all zero bytes)
 //! regardless of whether the advisory HOLES flag is set.
-use crate::archive::{ArchiveReader, MAX_FILE_SIZE, MAX_MEMBERS, Result, validate_name};
+use crate::archive::{ArchiveReader, LARGE_CONTAINER_MAX_SIZE, MAX_MEMBERS, Result, validate_name};
 use crate::bytes::{get, le32};
 use crate::registry::{FormatDescriptor, Signature};
 use miniz_oxide::inflate::{
@@ -30,6 +30,8 @@ pub const FORMAT: FormatDescriptor = FormatDescriptor {
     signatures: &[Signature::new(0, b"\x45\x3d\xcd\x28")],
     probe: None,
     open,
+    max_input_size: Some(crate::archive::LARGE_CONTAINER_MAX_SIZE),
+    max_file_size: Some(crate::archive::LARGE_CONTAINER_MAX_SIZE),
 };
 
 const BLOCK_SIZE: usize = 4096;
@@ -118,7 +120,7 @@ impl Cramfs {
         Ok(entries)
     }
     fn content(&self, inode: &Inode) -> Result<Vec<u8>> {
-        if inode.size > MAX_FILE_SIZE {
+        if inode.size > LARGE_CONTAINER_MAX_SIZE {
             return Err("cramfs file exceeds size limit".into());
         }
         let num_blocks = inode.size.div_ceil(BLOCK_SIZE);
