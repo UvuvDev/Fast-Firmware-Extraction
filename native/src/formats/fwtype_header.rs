@@ -27,6 +27,8 @@ pub const FORMAT: FormatDescriptor = FormatDescriptor {
     signatures: &SIGNATURES,
     probe: Some(probe),
     open,
+    max_input_size: None,
+    max_file_size: None,
 };
 fn payload_offset(data: &[u8]) -> Result<usize> {
     let prefix = &data[..data.len().min(SCAN_LIMIT)];
