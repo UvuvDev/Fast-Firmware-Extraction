@@ -7,6 +7,8 @@ pub const FORMAT: FormatDescriptor = FormatDescriptor {
     id: "trx", name: "Trx", description: "Broadcom TRX firmware",
     signatures: &[Signature::new(0, b"HDR0")],
     probe: None, open,
+    max_input_size: None,
+    max_file_size: None,
 };
 
 fn open(data: Vec<u8>) -> Result<Box<dyn ArchiveReader>> {
