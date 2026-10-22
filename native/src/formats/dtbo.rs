@@ -112,6 +112,8 @@ pub const FORMAT: FormatDescriptor = FormatDescriptor {
     id: "dtbo", name: "Dtbo", description: "DTBO / ACPI table image",
     signatures: &[Signature::new(0, b"\xd7\xb7\xab\x1e"), Signature::new(0, b"ACPI")],
     probe: None, open,
+    max_input_size: None,
+    max_file_size: None,
 };
 fn open(data: Vec<u8>) -> crate::archive::Result<Box<dyn ArchiveReader>> {
     let table = Dtbo::parse(&data).map_err(|e| e.to_string())?;
