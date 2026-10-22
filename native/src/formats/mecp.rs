@@ -22,6 +22,8 @@ pub const FORMAT: FormatDescriptor = FormatDescriptor {
     signatures: &[Signature::new(0, b"MECP")],
     probe: None,
     open,
+    max_input_size: None,
+    max_file_size: None,
 };
 fn name(data: &[u8]) -> String {
     String::from_utf8_lossy(data.split(|&byte| byte == 0).next().unwrap()).into_owned()
