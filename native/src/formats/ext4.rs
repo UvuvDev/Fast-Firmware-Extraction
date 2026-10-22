@@ -2,7 +2,7 @@
 //! Standard and padless superblocks, 32/64-byte group descriptors, extent
 //! trees and classic direct through triple-indirect pointers. Unwritten
 //! extents and holes read as zeroes. No journal replay or checksum validation.
-use crate::archive::{ArchiveReader, MAX_FILE_SIZE, MAX_MEMBERS, Result, validate_name};
+use crate::archive::{ArchiveReader, LARGE_CONTAINER_MAX_SIZE, MAX_MEMBERS, Result, validate_name};
 use crate::bytes::{get, le32};
 use crate::registry::{FormatDescriptor, Signature};
 use std::collections::HashSet;
@@ -17,6 +17,8 @@ pub const FORMAT: FormatDescriptor = FormatDescriptor {
     ],
     probe: Some(probe),
     open,
+    max_input_size: Some(crate::archive::LARGE_CONTAINER_MAX_SIZE),
+    max_file_size: Some(crate::archive::LARGE_CONTAINER_MAX_SIZE),
 };
 fn u16le(data: &[u8], offset: usize) -> Result<u16> {
     Ok(u16::from_le_bytes(
@@ -89,7 +91,7 @@ impl Ext4 {
             } else {
                 0
             };
-        if size > MAX_FILE_SIZE as u64 {
+        if size > LARGE_CONTAINER_MAX_SIZE as u64 {
             return Err("ext4 inode exceeds file size limit".into());
         }
         Ok(Inode {
