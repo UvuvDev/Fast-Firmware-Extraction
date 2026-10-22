@@ -2,18 +2,21 @@
 use std::collections::BTreeSet;
 use std::io::{Cursor, Read};
 use backhand::{FilesystemReader, InnerNode};
-use crate::archive::{ArchiveReader, Result, MAX_FILE_SIZE};
+use crate::archive::{ArchiveReader, LARGE_CONTAINER_MAX_SIZE, Result};
 use crate::bytes::{get, le32};
 use crate::registry::{FormatDescriptor, Signature};
 
 pub const FORMAT: FormatDescriptor = FormatDescriptor {
     id: "squashfs", name: "Squashfs", description: "SquashFS v4/XZ filesystem",
     signatures: &[Signature::new(0, b"hsqs")], probe: None, open,
+    max_input_size: Some(crate::archive::LARGE_CONTAINER_MAX_SIZE),
+    max_file_size: Some(crate::archive::LARGE_CONTAINER_MAX_SIZE),
 };
 struct Squashfs {
     fs: Box<FilesystemReader<'static>>,
     indices: Vec<usize>,
     names: Vec<String>,
+    diagnostics: String,
 }
 fn open(data: Vec<u8>) -> Result<Box<dyn ArchiveReader>> {
 // Bound metadata allocations before entering the reference reader.
@@ -42,23 +45,35 @@ let fs = Box::new(
 let mut names = Vec::new();
 let mut indices = Vec::new();
 let mut taken = BTreeSet::new();
+// Real Debian/Ubuntu SquashFS content routinely has one unsafe-on-some-
+// platforms path (a multiarch dpkg list with `:`, a systemd `\x2d`-escaped
+// unit name) among thousands of fine ones: skip just that path rather than
+// losing every other member behind it.
+let mut skipped = Vec::new();
 for (index, node) in fs.files().enumerate() {
     if let InnerNode::File(file) = &node.inner {
-        if file.file_len() > MAX_FILE_SIZE {
+        if file.file_len() > LARGE_CONTAINER_MAX_SIZE {
             return Err("SquashFS file exceeds size limit".into());
         }
-        let name = relative_name(&node.fullpath)?;
+        let Ok(name) = relative_name(&node.fullpath) else {
+            skipped.push(node.fullpath.to_string_lossy().into_owned());
+            continue;
+        };
         if !taken.insert(name.clone()) {
-            return Err("duplicate SquashFS path".into());
+            skipped.push(name);
+            continue;
         }
         names.push(name);
         indices.push(index);
     }
 }
-    Ok(Box::new(Squashfs { fs, indices, names }))
+let diagnostics =
+    crate::archive::skip_diagnostics("unsafe or duplicate SquashFS path(s)", &skipped);
+    Ok(Box::new(Squashfs { fs, indices, names, diagnostics }))
 }
 impl ArchiveReader for Squashfs {
     fn names(&self) -> &[String] { &self.names }
+    fn diagnostics(&self) -> &str { &self.diagnostics }
     fn read(&self, index: usize) -> Result<Vec<u8>> {
 let node = self.fs
     .files()
@@ -73,7 +88,7 @@ let reader = handle
     .map_err(|e| format!("SquashFS file: {e}"))?;
 let mut output = Vec::new();
 reader
-    .take(MAX_FILE_SIZE as u64 + 1)
+    .take(LARGE_CONTAINER_MAX_SIZE as u64 + 1)
     .read_to_end(&mut output)
     .map_err(|e| format!("SquashFS read: {e}"))?;
 if output.len() != file.file_len() {
@@ -89,4 +104,21 @@ fn relative_name(path: &std::path::Path) -> Result<String> {
     let name = raw.strip_prefix('/').unwrap_or(raw);
     crate::archive::validate_name(name)?;
     Ok(name.into())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::archive::Archive;
+    #[test]
+    fn skips_an_unsafe_name_but_keeps_every_other_member() {
+        // A real Debian/Ubuntu dpkg multiarch list (`pkg:arch.list`) sits
+        // next to an ordinary file; only the unsafe one should disappear.
+        let data =
+            include_bytes!("../../../tests/fixtures/squashfs_unsafe_names/sample.img").to_vec();
+        let archive = Archive::open("squashfs", data).unwrap();
+        assert_eq!(archive.names(), ["good.txt"]);
+        assert_eq!(archive.read_named("good.txt").unwrap(), b"good file contents\n");
+        assert!(archive.diagnostics().contains("skipped 1"));
+        assert!(archive.diagnostics().contains("pkg:arch.list"));
+    }
 }

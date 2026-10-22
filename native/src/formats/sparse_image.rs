@@ -10,6 +10,8 @@ use crate::registry::{FormatDescriptor, Signature};
 pub const FORMAT: FormatDescriptor = FormatDescriptor {
     id: "sparse_image", name: "AndroidSparse", description: "Android Sparse Image",
     signatures: &[Signature::new(0, b"\x3a\xff\x26\xed")], probe: None, open,
+    max_input_size: None,
+    max_file_size: None,
 };
 const RAW: u16 = 0xcac1;
 const FILL: u16 = 0xcac2;

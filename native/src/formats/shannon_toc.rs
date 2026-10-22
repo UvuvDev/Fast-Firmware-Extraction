@@ -17,6 +17,8 @@ pub const FORMAT: FormatDescriptor = FormatDescriptor {
     signatures: &[Signature::new(0, b"TOC\0")],
     probe: None,
     open,
+    max_input_size: None,
+    max_file_size: None,
 };
 fn name(entry: &[u8]) -> String {
     String::from_utf8_lossy(entry[..12].split(|&byte| byte == 0).next().unwrap()).into_owned()
@@ -156,14 +158,16 @@ mod tests {
         assert!(Archive::open("shannon_toc", data).is_err());
     }
     #[test]
-    fn unsafe_and_duplicate_names_are_rejected() {
+    fn skips_unsafe_and_duplicate_names_rather_than_failing_outright() {
         let mut data = SAMPLE.to_vec();
         data[32..44].fill(0);
         data[32..41].copy_from_slice(b"../escape");
-        assert!(Archive::open("shannon_toc", data).is_err());
+        let archive = Archive::open("shannon_toc", data).unwrap();
+        assert!(!archive.names().iter().any(|name| name == "../escape"));
         let mut data = SAMPLE.to_vec();
         data[64..76].fill(0);
         data[64..68].copy_from_slice(b"BOOT");
-        assert!(Archive::open("shannon_toc", data).is_err());
+        let archive = Archive::open("shannon_toc", data).unwrap();
+        assert_eq!(archive.names().iter().filter(|name| *name == "BOOT").count(), 1);
     }
 }

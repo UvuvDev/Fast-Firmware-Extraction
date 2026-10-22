@@ -17,6 +17,8 @@ pub const FORMAT: FormatDescriptor = FormatDescriptor {
     ],
     probe: None,
     open,
+    max_input_size: None,
+    max_file_size: None,
 };
 fn add(a: usize, b: usize) -> Result<usize> {
     a.checked_add(b).ok_or("boot image offset overflow".into())

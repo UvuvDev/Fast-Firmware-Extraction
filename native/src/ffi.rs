@@ -99,7 +99,7 @@ pub unsafe extern "C" fn ffe_archive_open(
 ) -> i32 {
     if output.is_null()
         || data.is_null()
-        || length > crate::archive::MAX_INPUT_SIZE
+        || length > crate::registry::max_input_size()
         || format.is_null()
         || format_length > 256
     {

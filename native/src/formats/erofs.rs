@@ -2,7 +2,7 @@
 //! is AOSP erofs-utils (GPL-2.0+ OR MIT), under the MIT option. Supports compact
 //! and extended inodes, flat/inline data, single-device chunks and sparse data.
 //! Compressed inodes, metabox and global 48BIT addressing are unsupported.
-use crate::archive::{ArchiveReader, MAX_FILE_SIZE, MAX_MEMBERS, Result, validate_name};
+use crate::archive::{ArchiveReader, LARGE_CONTAINER_MAX_SIZE, MAX_MEMBERS, Result, validate_name};
 use crate::bytes::{get, le32};
 use crate::registry::{FormatDescriptor, Signature};
 use std::collections::HashSet;
@@ -14,6 +14,8 @@ pub const FORMAT: FormatDescriptor = FormatDescriptor {
     signatures: &[Signature::new(1024, b"\xe2\xe1\xf5\xe0")],
     probe: None,
     open,
+    max_input_size: Some(crate::archive::LARGE_CONTAINER_MAX_SIZE),
+    max_file_size: Some(crate::archive::LARGE_CONTAINER_MAX_SIZE),
 };
 fn u16le(data: &[u8], offset: usize) -> Result<u16> {
     Ok(u16::from_le_bytes(
@@ -68,7 +70,7 @@ impl Erofs {
         } else {
             le32(raw, 8)? as u64
         };
-        if size > MAX_FILE_SIZE as u64 {
+        if size > LARGE_CONTAINER_MAX_SIZE as u64 {
             return Err("EROFS inode exceeds file size limit".into());
         }
         let layout = (format >> 1) & 7;
@@ -395,8 +397,12 @@ mod tests {
         let mut data = sample();
         put32(&mut data, 1104, 0x100);
         assert!(open(data).is_err());
+        // A compact inode's 32-bit size field tops out under 4 GiB, which
+        // the raised LARGE_CONTAINER_MAX_SIZE limit now accepts; exceeding
+        // that limit needs an extended inode's 64-bit size field instead.
         let mut data = sample();
-        put32(&mut data, 1568 + 8, u32::MAX);
+        put16(&mut data, 1568, 1); // extended inode
+        data[1568 + 8..1568 + 16].copy_from_slice(&(20_u64 * 1024 * 1024 * 1024).to_le_bytes());
         assert!(open(data).is_err());
     }
     #[test]

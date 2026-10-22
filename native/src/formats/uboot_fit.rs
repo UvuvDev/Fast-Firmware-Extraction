@@ -26,6 +26,8 @@ pub const FORMAT: FormatDescriptor = FormatDescriptor {
     signatures: &[Signature::new(0, b"\xd0\x0d\xfe\xed")],
     probe: None,
     open,
+    max_input_size: None,
+    max_file_size: None,
 };
 
 const HEADER_SIZE: usize = 40;

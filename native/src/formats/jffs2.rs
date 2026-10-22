@@ -17,7 +17,7 @@
 //! when generating fixtures, mirroring how UBIFS here documents LZO/ZSTD as
 //! unsupported). Summary, padding, cleanmarker, xattr, and xref nodes are
 //! skipped; symlinks and device nodes are not exposed as members.
-use crate::archive::{ArchiveReader, MAX_FILE_SIZE, MAX_MEMBERS, Result, validate_name};
+use crate::archive::{ArchiveReader, LARGE_CONTAINER_MAX_SIZE, MAX_MEMBERS, Result, validate_name};
 use crate::bytes::{get, le32};
 use crate::registry::{FormatDescriptor, Signature};
 use miniz_oxide::inflate::{
@@ -36,6 +36,8 @@ pub const FORMAT: FormatDescriptor = FormatDescriptor {
     signatures: &[Signature::new(0, b"\x85\x19")],
     probe: Some(probe),
     open,
+    max_input_size: Some(crate::archive::LARGE_CONTAINER_MAX_SIZE),
+    max_file_size: Some(crate::archive::LARGE_CONTAINER_MAX_SIZE),
 };
 
 const MAGIC: u16 = 0x1985;
@@ -204,7 +206,7 @@ impl Jffs2 {
         if !matches!(compr, COMPR_NONE | COMPR_ZERO | COMPR_COPY | COMPR_ZLIB) {
             return Err("unsupported JFFS2 compression type".into());
         }
-        if size > MAX_FILE_SIZE || dsize > MAX_FILE_SIZE {
+        if size > LARGE_CONTAINER_MAX_SIZE || dsize > LARGE_CONTAINER_MAX_SIZE {
             return Err("JFFS2 file exceeds size limit".into());
         }
         let payload_start = add(pos, 68)?;
@@ -327,7 +329,7 @@ impl ArchiveReader for Jffs2 {
         let mut output = vec![0_u8; inode.size];
         for fragment in fragments {
             let end = add(fragment.offset, fragment.dsize)?;
-            if end > MAX_FILE_SIZE {
+            if end > LARGE_CONTAINER_MAX_SIZE {
                 return Err("JFFS2 fragment exceeds size limit".into());
             }
             if end > output.len() {

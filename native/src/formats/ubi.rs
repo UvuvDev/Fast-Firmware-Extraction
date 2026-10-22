@@ -2,7 +2,7 @@
 //! EC/VID/table layout. No kernel or mtd-utils implementation was copied.
 //! Reorders LEBs and honors static lengths/dynamic capacity and data padding.
 //! Uses the first layout LEB 0; update recovery and header CRCs are not supported.
-use crate::archive::{ArchiveReader, MAX_FILE_SIZE, Result};
+use crate::archive::{ArchiveReader, LARGE_CONTAINER_MAX_SIZE, Result};
 use crate::bytes::{be32, get};
 use crate::registry::{FormatDescriptor, Signature};
 use std::{collections::BTreeMap, ops::Range};
@@ -15,6 +15,8 @@ pub const FORMAT: FormatDescriptor = FormatDescriptor {
     signatures: &[Signature::new(0, b"UBI#")],
     probe: None,
     open,
+    max_input_size: Some(crate::archive::LARGE_CONTAINER_MAX_SIZE),
+    max_file_size: Some(crate::archive::LARGE_CONTAINER_MAX_SIZE),
 };
 struct Ubi {
     data: Vec<u8>,
@@ -113,7 +115,7 @@ fn open(data: Vec<u8>) -> Result<Box<dyn ArchiveReader>> {
             }
             size = size
                 .checked_add(range.len())
-                .filter(|&n| n <= MAX_FILE_SIZE)
+                .filter(|&n| n <= LARGE_CONTAINER_MAX_SIZE)
                 .ok_or("UBI volume exceeds file limit")?;
         }
         names.push(String::from_utf8_lossy(&record[16..16 + length]).into_owned());
@@ -143,7 +145,7 @@ mod tests {
         assert!(open(data).is_err());
     }
     #[test]
-    fn rejects_gaps_duplicate_lebs_and_unsafe_names() {
+    fn rejects_gaps_and_duplicate_lebs_but_skips_unsafe_names() {
         let mut data = sample();
         data[512 + 64 + 12..512 + 64 + 16].copy_from_slice(&1u32.to_be_bytes());
         assert!(open(data).is_err());
@@ -152,7 +154,8 @@ mod tests {
         assert!(open(data).is_err());
         let mut data = sample();
         data[144..148].copy_from_slice(b"../x");
-        assert!(Archive::open("ubi", data).is_err());
+        let archive = Archive::open("ubi", data).unwrap();
+        assert!(!archive.names().iter().any(|name| name == "../x"));
     }
     #[test]
     fn reorders_static_lebs_and_reads_dynamic_padding() {

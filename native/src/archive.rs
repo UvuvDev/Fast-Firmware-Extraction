@@ -9,6 +9,14 @@ pub type Result<T> = std::result::Result<T, String>;
 pub const MAX_FILE_SIZE: usize = 512 * 1024 * 1024;
 pub const MAX_INPUT_SIZE: usize = 1024 * 1024 * 1024;
 pub const MAX_MEMBERS: usize = 1_000_000;
+/// `FormatDescriptor::max_input_size`/`max_file_size` override for a format
+/// that is itself a whole disk/partition image, where the whole input or
+/// an individual member routinely exceeding the defaults above is a normal,
+/// non-malicious occurrence (a multi-GiB Android system/vendor partition, a
+/// squashfs/erofs filesystem nested inside a multi-GiB ISO, a DVD9 image).
+/// Formats with no legitimate reason to ever be gigabytes keep the tighter
+/// defaults, so a pathological claim from one of *those* still fails fast.
+pub const LARGE_CONTAINER_MAX_SIZE: usize = 16 * 1024 * 1024 * 1024;
 
 /// Implement this only for a filesystem or custom decoder. Offset containers
 /// and decoded single streams can use RangeArchive directly.
@@ -45,6 +53,18 @@ pub struct RangeArchive {
 }
 impl RangeArchive {
     pub fn new(data: Vec<u8>, members: Vec<Member>) -> Result<Self> {
+        Self::new_with_file_size_limit(data, members, MAX_FILE_SIZE)
+    }
+    /// For a format whose `FormatDescriptor::max_file_size` legitimately
+    /// raises the crate-wide default (e.g. a multi-GiB file inside an ISO
+    /// 9660 image): the same validation as `new`, against `max_file_size`
+    /// instead of the constant. `Archive::read` separately re-checks every
+    /// read against that same per-format override, so the two stay consistent.
+    pub fn new_with_file_size_limit(
+        data: Vec<u8>,
+        members: Vec<Member>,
+        max_file_size: usize,
+    ) -> Result<Self> {
         if members.len() > MAX_MEMBERS {
             return Err("too many archive members".into());
         }
@@ -54,7 +74,7 @@ impl RangeArchive {
                 .end
                 .checked_sub(member.range.start)
                 .ok_or("reversed member range")?;
-            if size > MAX_FILE_SIZE || data.get(member.range.clone()).is_none() {
+            if size > max_file_size || data.get(member.range.clone()).is_none() {
                 return Err("member out of bounds or exceeds size limit".into());
             }
         }
@@ -126,10 +146,41 @@ pub fn validate_name(name: &str) -> Result<()> {
     Ok(())
 }
 
+/// Shared wording for a reader that drops some of its own entries rather
+/// than failing outright (see `Archive::open_format` and `formats::squashfs`,
+/// which both skip unsafe/duplicate names one real-world file at a time
+/// instead of losing every other, perfectly valid member behind it).
+pub fn skip_diagnostics(kind: &str, skipped: &[String]) -> String {
+    if skipped.is_empty() {
+        return String::new();
+    }
+    let shown: Vec<_> = skipped.iter().take(5).map(|name| format!("{name:?}")).collect();
+    let more = skipped.len().saturating_sub(shown.len());
+    let suffix = if more > 0 {
+        format!(", and {more} more")
+    } else {
+        String::new()
+    };
+    format!(
+        "skipped {} {kind}, not extracted: {}{suffix}",
+        skipped.len(),
+        shown.join(", "),
+    )
+}
+
 pub struct Archive {
     pub format: &'static registry::FormatDescriptor,
     reader: Box<dyn ArchiveReader>,
+    /// Exposed names, filtered down from `reader.names()`: unsafe and
+    /// duplicate names are excluded rather than failing the whole archive
+    /// (see `open_format`), so this is usually but not always the full list.
+    names: Vec<String>,
+    /// `names[i]` came from `reader.names()[original_indices[i]]`; `read`
+    /// translates an exposed index back to that original index before
+    /// delegating, so skipped entries never shift which bytes a name maps to.
+    original_indices: Vec<usize>,
     indices: HashMap<String, usize>,
+    diagnostics: String,
 }
 impl Archive {
     /// Stable string IDs cross the Rust/Python boundary; no numeric enum.
@@ -142,7 +193,7 @@ impl Archive {
         Self::open_format(format, data)
     }
     fn open_format(format: &'static registry::FormatDescriptor, data: Vec<u8>) -> Result<Self> {
-        if data.len() > MAX_INPUT_SIZE {
+        if data.len() > format.max_input_size.unwrap_or(MAX_INPUT_SIZE) {
             return Err("firmware exceeds input size limit".into());
         }
         let input_size = data.len();
@@ -162,15 +213,30 @@ impl Archive {
         if reader.names().len() > MAX_MEMBERS {
             return Err("too many archive members".into());
         }
+        // A single unsafe-named or duplicate entry must not hide every other,
+        // perfectly valid member behind it: real Linux filesystems routinely
+        // carry a `:` (multiarch dpkg lists) or `\` (systemd-escaped unit
+        // names) that are fine on Linux but unsafe to write verbatim on
+        // Windows/macOS. Skip just that entry and keep going.
         let mut taken = HashSet::new();
-        for name in reader.names() {
-            validate_name(name)?;
-            if !taken.insert(name) {
-                return Err(format!("duplicate archive member: {name}"));
+        let mut names = Vec::new();
+        let mut original_indices = Vec::new();
+        let mut skipped = Vec::new();
+        for (index, name) in reader.names().iter().enumerate() {
+            if validate_name(name).is_err() || !taken.insert(name) {
+                skipped.push(name.clone());
+                continue;
             }
+            names.push(name.clone());
+            original_indices.push(index);
         }
-        let indices = reader
-            .names()
+        let skip_message = skip_diagnostics("unsafe or duplicate archive member name(s)", &skipped);
+        let diagnostics = match (reader.diagnostics(), skip_message.as_str()) {
+            ("", skip) => skip.to_string(),
+            (reader_diag, "") => reader_diag.to_string(),
+            (reader_diag, skip) => format!("{reader_diag}\n{skip}"),
+        };
+        let indices = names
             .iter()
             .enumerate()
             .map(|(index, name)| (name.clone(), index))
@@ -178,11 +244,14 @@ impl Archive {
         Ok(Self {
             format,
             reader,
+            names,
+            original_indices,
             indices,
+            diagnostics,
         })
     }
     pub fn names(&self) -> &[String] {
-        self.reader.names()
+        &self.names
     }
     pub fn is_decoded_stream(&self) -> bool {
         self.reader.is_decoded_stream()
@@ -191,14 +260,15 @@ impl Archive {
         self.reader.embedded_range()
     }
     pub fn diagnostics(&self) -> &str {
-        self.reader.diagnostics()
+        &self.diagnostics
     }
     pub fn read(&self, index: usize) -> Result<Vec<u8>> {
-        if index >= self.names().len() {
-            return Err("file index out of range".into());
-        }
-        let data = self.reader.read(index)?;
-        if data.len() > MAX_FILE_SIZE {
+        let original = *self
+            .original_indices
+            .get(index)
+            .ok_or("file index out of range")?;
+        let data = self.reader.read(original)?;
+        if data.len() > self.format.max_file_size.unwrap_or(MAX_FILE_SIZE) {
             return Err("member exceeds size limit".into());
         }
         Ok(data)
@@ -227,6 +297,8 @@ mod tests {
             };
             Ok(Box::new(reader.with_embedded_range(range)))
         },
+        max_input_size: None,
+        max_file_size: None,
     };
 
     #[test]
@@ -242,5 +314,96 @@ mod tests {
             let archive = Archive::open_format(&LAYOUT, data).unwrap();
             assert_eq!(archive.embedded_range(), Some(start as usize..end as usize));
         }
+    }
+
+    #[test]
+    fn max_input_size_override_replaces_the_crate_wide_default() {
+        const SMALL_LIMIT: registry::FormatDescriptor = registry::FormatDescriptor {
+            id: "small_limit_test",
+            name: "SmallLimitTest",
+            description: "max_input_size override test",
+            signatures: &[],
+            probe: None,
+            open: |data| RangeArchive::single("member", data).map(|archive| Box::new(archive) as _),
+            max_input_size: Some(5),
+            max_file_size: None,
+        };
+        assert!(Archive::open_format(&SMALL_LIMIT, vec![0; 6]).is_err());
+        assert!(Archive::open_format(&SMALL_LIMIT, vec![0; 5]).is_ok());
+    }
+
+    #[test]
+    fn max_file_size_override_is_honored_at_construction_and_at_read() {
+        // RangeArchive::new_with_file_size_limit, used directly: a custom
+        // limit (not the crate-wide MAX_FILE_SIZE) is what's enforced.
+        let member = |len| Member {
+            name: "member".into(),
+            range: 0..len,
+        };
+        assert!(RangeArchive::new_with_file_size_limit(vec![0; 6], vec![member(6)], 5).is_err());
+        assert!(RangeArchive::new_with_file_size_limit(vec![0; 5], vec![member(5)], 5).is_ok());
+
+        // Archive::read's own re-check must also consult the format's
+        // override, not just trust whatever RangeArchive::new (the
+        // crate-wide default) already allowed at construction time.
+        const SMALL_READ_LIMIT: registry::FormatDescriptor = registry::FormatDescriptor {
+            id: "small_read_limit_test",
+            name: "SmallReadLimitTest",
+            description: "max_file_size override test",
+            signatures: &[],
+            probe: None,
+            open: |data| {
+                let length = data.len();
+                RangeArchive::new(data, vec![Member { name: "member".into(), range: 0..length }])
+                    .map(|archive| Box::new(archive) as _)
+            },
+            max_input_size: None,
+            max_file_size: Some(5),
+        };
+        let archive = Archive::open_format(&SMALL_READ_LIMIT, vec![0; 6]).unwrap();
+        assert!(archive.read(0).is_err());
+    }
+
+    #[test]
+    fn unsafe_or_duplicate_names_are_skipped_not_fatal() {
+        // Real Debian/Ubuntu squashfs content routinely has one bad-named
+        // file (a multiarch `:` in a dpkg list, a systemd `\x2d` escape)
+        // among thousands of fine ones; it must not take the whole archive
+        // down with it.
+        const MIXED: registry::FormatDescriptor = registry::FormatDescriptor {
+            id: "mixed_names_test",
+            name: "MixedNamesTest",
+            description: "skip-unsafe-names test",
+            signatures: &[],
+            probe: None,
+            open: |data| {
+                let member = |name: &str, range: Range<usize>| Member {
+                    name: name.into(),
+                    range,
+                };
+                RangeArchive::new(
+                    data,
+                    vec![
+                        member("good.txt", 0..1),
+                        member("bad:name.txt", 1..2),
+                        member("dup.txt", 2..3),
+                        member("dup.txt", 3..4),
+                        member("another_good", 4..5),
+                    ],
+                )
+                .map(|archive| Box::new(archive) as _)
+            },
+            max_input_size: None,
+            max_file_size: None,
+        };
+        let archive = Archive::open_format(&MIXED, b"abcde".to_vec()).unwrap();
+        assert_eq!(archive.names(), ["good.txt", "dup.txt", "another_good"]);
+        assert_eq!(archive.read(0).unwrap(), b"a");
+        assert_eq!(archive.read(1).unwrap(), b"c");
+        assert_eq!(archive.read(2).unwrap(), b"e");
+        assert_eq!(archive.read_named("dup.txt").unwrap(), b"c");
+        assert!(archive.read_named("bad:name.txt").is_err());
+        assert!(archive.diagnostics().contains("skipped 2"));
+        assert!(archive.diagnostics().contains("\"bad:name.txt\""));
     }
 }

@@ -13,9 +13,22 @@ pub const FORMAT: FormatDescriptor = FormatDescriptor {
     name: "Gpt",
     description: "GUID Partition Table (512-byte sectors)",
     signatures: &[Signature::new(510, b"\x55\xaaEFI PART")],
-    probe: None,
+    // A "hybrid" ISO 9660 image (virtually every modern Linux live/install
+    // ISO, built to also be dd'able to a USB stick) carries a real GPT
+    // signature here *and* a real ISO 9660 Primary Volume Descriptor at the
+    // conventional sector 16 -- confirmed against a real Fedora Workstation
+    // Live ISO. GPT's signature is longer/more specific than iso9660's bare
+    // "CD001", so without this probe it always wins detection, and the
+    // actual filesystem contents are never reached.
+    probe: Some(|data| !looks_like_iso9660(data)),
     open,
+    max_input_size: Some(crate::archive::LARGE_CONTAINER_MAX_SIZE),
+    max_file_size: Some(crate::archive::LARGE_CONTAINER_MAX_SIZE),
 };
+fn looks_like_iso9660(data: &[u8]) -> bool {
+    const PVD: usize = 16 * 2048;
+    matches!(data.get(PVD..PVD + 7), Some([1, b'C', b'D', b'0', b'0', b'1', 1]))
+}
 fn word64(data: &[u8], offset: usize) -> Result<u64> {
     Ok(u64::from_le_bytes(
         get(data, offset, 8)?.try_into().unwrap(),
@@ -90,7 +103,21 @@ fn open(data: Vec<u8>) -> Result<Box<dyn ArchiveReader>> {
 #[cfg(test)]
 mod tests {
     use crate::archive::Archive;
+    use crate::registry;
     const SAMPLE: &[u8] = include_bytes!("../../../tests/fixtures/gpt/sample.img");
+
+    #[test]
+    fn defers_detection_to_iso9660_on_a_hybrid_image() {
+        // A real "hybrid" ISO (every modern Linux live/install image) has a
+        // genuine GPT/MBR signature at 510 *and* a genuine ISO 9660 PVD at
+        // sector 16 -- confirmed against a real Fedora Workstation Live
+        // ISO. GPT's longer signature must not win over iso9660's shorter
+        // one here, or the actual filesystem is never reached.
+        let mut data = vec![0_u8; 16 * 2048 + 7];
+        data[510..520].copy_from_slice(b"\x55\xaaEFI PART");
+        data[16 * 2048..16 * 2048 + 7].copy_from_slice(b"\x01CD001\x01");
+        assert_eq!(registry::detect(&data).unwrap().id, "iso9660");
+    }
     fn set32(data: &mut [u8], offset: usize, value: u32) {
         data[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
     }

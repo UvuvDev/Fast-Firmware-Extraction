@@ -12,6 +12,8 @@ pub const FORMAT: FormatDescriptor = FormatDescriptor {
     signatures: &[Signature::new(0, b"\x76\x98\x34\x12")],
     probe: None,
     open,
+    max_input_size: None,
+    max_file_size: None,
 };
 fn open(data: Vec<u8>) -> Result<Box<dyn ArchiveReader>> {
     let header = get(&data, 0, 28)?;
@@ -79,13 +81,15 @@ mod tests {
         assert!(open(data).unwrap().names().is_empty());
     }
     #[test]
-    fn unsafe_and_duplicate_names_rejected() {
+    fn skips_unsafe_and_duplicate_names_rather_than_failing_outright() {
         let mut data = sample();
         data[64..96].fill(0);
         data[64..68].copy_from_slice(b"../x");
-        assert!(Archive::open("samsung_pit", data).is_err());
+        let archive = Archive::open("samsung_pit", data).unwrap();
+        assert_eq!(archive.names(), ["SYSTEM"]);
         let mut data = sample();
         data.copy_within(64..96, 196);
-        assert!(Archive::open("samsung_pit", data).is_err());
+        let archive = Archive::open("samsung_pit", data).unwrap();
+        assert_eq!(archive.names().len(), 1);
     }
 }

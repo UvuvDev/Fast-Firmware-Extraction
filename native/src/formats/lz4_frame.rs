@@ -16,6 +16,8 @@ pub const FORMAT: FormatDescriptor = FormatDescriptor {
     signatures: &[Signature::new(0, b"\x04\x22\x4d\x18")],
     probe: None,
     open,
+    max_input_size: None,
+    max_file_size: None,
 };
 fn frame_end(data: &[u8], start: usize, limit: usize) -> Result<usize> {
     let header = get(data, start, 7)?;

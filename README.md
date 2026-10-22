@@ -90,8 +90,32 @@ the kernel is under `firmware.trx.unpacked/kernel.lzma.unpacked/kernel.bin`
 and filesystem files under `firmware.trx.unpacked/rootfs.squashfs.unpacked/`.
 Each archive directory contains `.ffe-paths.tsv`, mapping original paths to
 disk paths and nested directories. Case collisions receive suffixes. The
-output directory must be new. Use `--list-formats` to view the built registry.
-See [R7000 validation and fixture provenance](docs/R7000.md).
+output directory must be new. A detected-but-unopenable nested member (an
+unsupported sub-feature, or genuine corruption) is left un-recursed-into with
+a warning on stderr, rather than aborting the rest of the extraction. Total
+output across one run is capped at 64 GiB / 1,000,000 files. Use
+`--list-formats` to view the built registry. See
+[R7000 validation and fixture provenance](docs/R7000.md).
+
+Most formats cap both the whole input and any single member at 512 MiB/1 GiB
+(`MAX_FILE_SIZE`/`MAX_INPUT_SIZE`), since a firmware partition or header has
+no legitimate reason to exceed that; a format can override either bound
+(`FormatDescriptor::max_file_size`/`max_input_size`) where routinely exceeding
+it is normal rather than a sign of a hostile input. AndroidSuperImage, Cramfs,
+Erofs, Ext4, F2fs, Gpt, Iso9660, Jffs2, Squashfs, Ubi, and Ubifs raise both to
+16 GiB: a disk/partition image or an individual multi-GiB filesystem nested
+inside one (e.g. a Linux live ISO's squashfs/erofs) is exactly that case.
+
+Member names are rejected if they contain `\` or `:`, are empty, control
+characters, `.`/`..` path segments, or exceed 4096 bytes — both are unsafe to
+write verbatim on Windows (a path separator and a drive-letter/NTFS-stream
+marker, respectively) even though they're ordinary on Linux (multiarch dpkg
+lists like `pkg:arm64.list`, systemd `\x2d`-escaped generated unit names).
+One such name, or a duplicate, is skipped rather than failing the whole
+archive — confirmed against real Debian/Ubuntu SquashFS content inside a
+real Ubuntu Desktop ISO, where a single bad name among tens of thousands of
+members would otherwise have hidden every one of them. The skipped names are
+reported via `diagnostics()`/stderr, capped at 5 shown plus a count.
 
 Boot v0–v4 and vendor boot v3/v4 extract kernel/ramdisk, legacy second-stage
 and DTBO/DTB segments, v4 signature bytes, fragmented vendor ramdisks, and
@@ -107,6 +131,12 @@ cryptographic signatures are not verified.
 GPT currently uses 512-byte logical sectors and checks both header and
 partition-array CRC32s. Extended header/entry sizes and UTF-16LE partition
 names are supported; backup-table recovery and 4 KiB sectors are not yet implemented.
+A "hybrid" ISO 9660 image (virtually every modern Linux live/install ISO,
+built to also be dd'able to a USB stick) carries a real GPT/MBR signature
+*and* a real ISO 9660 Primary Volume Descriptor at once, confirmed against a
+real Fedora Workstation Live ISO; GPT's own probe defers to Iso9660 when both
+are present, since GPT's longer signature would otherwise always win
+detection and the actual filesystem contents would never be reached.
 
 Self-extracting vendor wrappers scan at most 1 MiB for the `tail -n +N $0 | tar`
 marker and expose the remaining bytes as `payload.gz`. Scripts are never run.

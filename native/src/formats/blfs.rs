@@ -15,6 +15,8 @@ pub const FORMAT: FormatDescriptor = FormatDescriptor {
     signatures: &[Signature::new(0, b"sFlB"), Signature::embedded(b"sFlB")],
     probe: Some(|data| locate(data).is_some()),
     open,
+    max_input_size: None,
+    max_file_size: None,
 };
 fn geometry(data: &[u8], base: usize) -> Result<(usize, usize, usize)> {
     let header = get(data, base, 32)?;
@@ -159,14 +161,16 @@ mod tests {
         }
     }
     #[test]
-    fn rejects_duplicate_and_unsafe_names() {
+    fn skips_duplicate_and_unsafe_names_rather_than_failing_outright() {
         let mut data = sample();
         data.copy_within(32..80, 96);
-        assert!(Archive::open("blfs", data).is_err());
+        let archive = Archive::open("blfs", data).unwrap();
+        assert_eq!(archive.names().len(), 1);
         let mut data = sample();
         data[32..80].fill(0);
         data[32..36].copy_from_slice(b"../x");
-        assert!(Archive::open("blfs", data).is_err());
+        let archive = Archive::open("blfs", data).unwrap();
+        assert_eq!(archive.names().len(), 1);
     }
     #[test]
     fn embedded_search_is_bounded() {
