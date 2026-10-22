@@ -5,7 +5,7 @@
 //! tiers. No inline xattrs, compression, encryption, checkpoint-payload overflow,
 //! NAT journal/roll-forward replay, or checksum verification. Synthetic coverage
 //! only; see tests/fixture_sources/f2fs/README.md for the supported scope.
-use crate::archive::{ArchiveReader, MAX_FILE_SIZE, MAX_MEMBERS, Result, validate_name};
+use crate::archive::{ArchiveReader, LARGE_CONTAINER_MAX_SIZE, MAX_MEMBERS, Result, validate_name};
 use crate::bytes::{get, le32};
 use crate::registry::{FormatDescriptor, Signature};
 use std::{collections::HashSet, ops::Range};
@@ -23,6 +23,8 @@ pub const FORMAT: FormatDescriptor = FormatDescriptor {
     ],
     probe: Some(|data| superblock(data).is_some()),
     open,
+    max_input_size: Some(crate::archive::LARGE_CONTAINER_MAX_SIZE),
+    max_file_size: Some(crate::archive::LARGE_CONTAINER_MAX_SIZE),
 };
 fn u16le(data: &[u8], offset: usize) -> Result<u16> {
     Ok(u16::from_le_bytes(
@@ -155,7 +157,7 @@ impl F2fs {
         let range = self.node(nid, nid)?;
         let raw = &self.data[range.clone()];
         let size = u64le(raw, 16)?;
-        if size > MAX_FILE_SIZE as u64 {
+        if size > LARGE_CONTAINER_MAX_SIZE as u64 {
             return Err("F2FS inode exceeds file size limit".into());
         }
         if le32(raw, 80)? & 4 != 0 {
@@ -493,8 +495,10 @@ mod tests {
         let mut data = sample();
         data[40 * BS + 2] |= 4;
         assert!(open(data).is_err());
+        // i_size is a full 64-bit field; only setting its low 32 bits (as
+        // u32::MAX) stays under the raised LARGE_CONTAINER_MAX_SIZE limit.
         let mut data = sample();
-        put32(&mut data, 41 * BS + 16, u32::MAX);
+        data[41 * BS + 16..41 * BS + 24].copy_from_slice(&(20_u64 * 1024 * 1024 * 1024).to_le_bytes());
         assert!(open(data).is_err());
     }
     #[test]
