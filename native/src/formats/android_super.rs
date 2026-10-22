@@ -26,7 +26,7 @@
 //! which takes exactly that set of files (just not concatenated). A single
 //! partition's extents can legitimately reference more than one device
 //! this way (see tests::reassembles_a_partition_that_spans_two_block_devices).
-use crate::archive::{ArchiveReader, MAX_FILE_SIZE, MAX_MEMBERS, Result, validate_name};
+use crate::archive::{ArchiveReader, LARGE_CONTAINER_MAX_SIZE, MAX_MEMBERS, Result, validate_name};
 use crate::bytes::{get, le32};
 use crate::registry::{FormatDescriptor, Signature};
 use sha2::{Digest, Sha256};
@@ -39,6 +39,9 @@ pub const FORMAT: FormatDescriptor = FormatDescriptor {
     signatures: &[Signature::new(4096, b"\x67\x44\x6c\x61")],
     probe: None,
     open,
+    // Individual Android system/vendor partitions are routinely multi-GiB.
+    max_input_size: Some(LARGE_CONTAINER_MAX_SIZE),
+    max_file_size: Some(LARGE_CONTAINER_MAX_SIZE),
 };
 
 const SECTOR_SIZE: usize = 512;
@@ -235,7 +238,7 @@ fn open(data: Vec<u8>) -> Result<Box<dyn ArchiveReader>> {
             let target_type = le32(extent, 8)?;
             let length = mul(num_sectors, SECTOR_SIZE)?;
             partition_size = add(partition_size, length)?;
-            if partition_size > MAX_FILE_SIZE {
+            if partition_size > LARGE_CONTAINER_MAX_SIZE {
                 return Err("super image partition exceeds size limit".into());
             }
             match target_type {
