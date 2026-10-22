@@ -21,7 +21,10 @@
 //! reading each record's Rock Ridge "NM" name if present, else its plain
 //! ISO 9660 name with the ";version" suffix stripped. El Torito boot
 //! images and multiple sessions are not inspected.
-use crate::archive::{ArchiveReader, MAX_MEMBERS, Member, RangeArchive, Result, validate_name};
+use crate::archive::{
+    ArchiveReader, LARGE_CONTAINER_MAX_SIZE, MAX_MEMBERS, Member, RangeArchive, Result,
+    validate_name,
+};
 use crate::bytes::{get, le32};
 use crate::registry::{FormatDescriptor, Signature};
 use std::collections::HashSet;
@@ -33,6 +36,8 @@ pub const FORMAT: FormatDescriptor = FormatDescriptor {
     signatures: &[Signature::new(16 * SECTOR_SIZE + 1, b"CD001")],
     probe: None,
     open,
+    max_input_size: Some(LARGE_CONTAINER_MAX_SIZE),
+    max_file_size: Some(LARGE_CONTAINER_MAX_SIZE),
 };
 
 const SECTOR_SIZE: usize = 2048;
@@ -136,7 +141,9 @@ fn parse_record(record: &[u8], source: NameSource) -> Result<Option<Entry>> {
     }))
 }
 fn read_directory(data: &[u8], extent: usize, size: usize, source: NameSource) -> Result<Vec<Entry>> {
-    let bytes = get(data, mul(extent, SECTOR_SIZE)?, size)?;
+    let bytes = get(data, mul(extent, SECTOR_SIZE)?, size).map_err(|_| {
+        "ISO 9660 directory extent exceeds the buffer (bad or damaged volume descriptor)"
+    })?;
     let mut entries = Vec::new();
     let mut pos = 0;
     while pos < bytes.len() {
@@ -240,7 +247,11 @@ fn open(data: Vec<u8>) -> Result<Box<dyn ArchiveReader>> {
             }
         }
     }
-    Ok(Box::new(RangeArchive::new(data, members)?))
+    Ok(Box::new(RangeArchive::new_with_file_size_limit(
+        data,
+        members,
+        LARGE_CONTAINER_MAX_SIZE,
+    )?))
 }
 
 #[cfg(test)]
