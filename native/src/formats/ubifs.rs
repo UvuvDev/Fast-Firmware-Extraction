@@ -2,7 +2,7 @@
 //! on-disk facts. No Linux/mtd-utils implementation code is copied. Validate
 //! node CRCs and B-tree references; none/raw-DEFLATE data only. No journal
 //! replay, diverging-master recovery, authentication, LZO or ZSTD support.
-use crate::archive::{ArchiveReader, MAX_FILE_SIZE, MAX_MEMBERS, Result, validate_name};
+use crate::archive::{ArchiveReader, LARGE_CONTAINER_MAX_SIZE, MAX_MEMBERS, Result, validate_name};
 use crate::bytes::{get, le32};
 use crate::registry::{FormatDescriptor, Signature};
 use miniz_oxide::inflate::{
@@ -21,6 +21,8 @@ pub const FORMAT: FormatDescriptor = FormatDescriptor {
     signatures: &[Signature::new(0, b"\x31\x18\x10\x06")],
     probe: Some(|data| data.get(20) == Some(&6)),
     open,
+    max_input_size: Some(crate::archive::LARGE_CONTAINER_MAX_SIZE),
+    max_file_size: Some(crate::archive::LARGE_CONTAINER_MAX_SIZE),
 };
 fn u16le(data: &[u8], off: usize) -> Result<u16> {
     Ok(u16::from_le_bytes(get(data, off, 2)?.try_into().unwrap()))
@@ -115,7 +117,7 @@ impl Ubifs {
             0 => {
                 get(bytes, 0, 160)?;
                 let size = u64le(bytes, 48)?;
-                if size > MAX_FILE_SIZE as u64 {
+                if size > LARGE_CONTAINER_MAX_SIZE as u64 {
                     return Err("UBIFS inode exceeds file size limit".into());
                 }
                 let record = Inode {
@@ -439,8 +441,10 @@ mod tests {
         data.copy_within(12288 + 28..12288 + 48, 12288 + 48);
         fix(&mut data, 12288);
         assert!(open(data).is_err());
+        // size is a full 64-bit field; only setting its low 32 bits (as
+        // u32::MAX) stays under the raised LARGE_CONTAINER_MAX_SIZE limit.
         let mut data = sample();
-        put32(&mut data, 16752 + 48, u32::MAX);
+        data[16752 + 48..16752 + 56].copy_from_slice(&(20_u64 * 1024 * 1024 * 1024).to_le_bytes());
         fix(&mut data, 16752);
         assert!(open(data).is_err());
     }
