@@ -12,6 +12,8 @@ use crate::registry::{FormatDescriptor, Signature};
 pub const FORMAT: FormatDescriptor = FormatDescriptor {
     id: "fbpack", name: "FBPack", description: "Fastboot Package (FBPK v1/v2)",
     signatures: &[Signature::new(0, b"FBPK")], probe: None, open,
+    max_input_size: None,
+    max_file_size: None,
 };
 
 fn word64(data: &[u8], offset: usize) -> Result<usize> {
