@@ -8,6 +8,7 @@ description = "Firmware container parsers independent of Binary Ninja"
 
 [dependencies]
 aho-corasick = "=1.1.4"
+lzma-rust2 = { version = "=0.21.0", default-features = false, features = ["std"] }
 
 [dev-dependencies]
 serde_json = "1.0"
