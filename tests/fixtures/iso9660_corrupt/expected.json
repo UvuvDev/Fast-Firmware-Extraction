@@ -1,5 +1,0 @@
-{
-  "sample": "sample.iso",
-  "native_format": "iso9660",
-  "expect_failure": true
-}

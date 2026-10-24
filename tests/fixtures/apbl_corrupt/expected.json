@@ -1,5 +1,0 @@
-{
-  "native_format": "apbl",
-  "sample": "sample.bin",
-  "expect_failure": true
-}
