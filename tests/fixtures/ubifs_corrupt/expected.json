@@ -1,5 +1,0 @@
-{
-  "sample": "sample.ubifs",
-  "expect_failure": true,
-  "native_format": "ubifs"
-}

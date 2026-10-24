@@ -1,5 +1,0 @@
-{
-  "sample": "sample.cpio",
-  "native_format": "cpio_newc",
-  "expect_failure": true
-}

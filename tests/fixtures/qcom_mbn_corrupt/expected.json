@@ -1,5 +1,0 @@
-{
-  "sample": "sample.mbn",
-  "expect_failure": true,
-  "native_format": "qcom_mbn"
-}

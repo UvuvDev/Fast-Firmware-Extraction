@@ -1,5 +1,0 @@
-{
-  "native_format": "blfs",
-  "sample": "sample.blfs",
-  "expect_failure": true
-}

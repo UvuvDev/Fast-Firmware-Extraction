@@ -1,1 +1,0 @@
-Synthetic extension of the existing sparse fixture. Header and chunk layouts follow AOSP libsparse/sparse_format.h. CRC32 is computed independently with Python zlib over `AAAA`, twelve 0xee bytes, and eight zero bytes. The corrupt fixture flips one bit in the CRC chunk. No vendor firmware bytes are used.

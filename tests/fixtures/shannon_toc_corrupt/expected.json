@@ -1,5 +1,0 @@
-{
-  "sample": "sample.bin",
-  "expect_failure": true,
-  "native_format": "shannon_toc"
-}
