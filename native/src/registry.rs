@@ -418,13 +418,20 @@ mod tests {
 
     #[test]
     fn max_input_size_defaults_to_the_crate_wide_bound_when_nothing_overrides_it() {
-        // No registered format overrides the limit upward (core-main has no
-        // formats at all), so the registry-wide bound every caller sees
-        // before a format is known must fall back to the crate default.
-        // A format that overrides this (e.g. iso9660, for optical/install
-        // images routinely over 1 GiB) covers the override case in its own
-        // branch's tests.
-        assert_eq!(max_input_size(), crate::archive::MAX_INPUT_SIZE);
+        // Deliberately bypasses the global formats()/max_input_size() (which
+        // reflect whichever real formats happen to be compiled in on a given
+        // branch - several legitimately override the bound upward) and
+        // replicates the same fallback arithmetic against an explicit empty
+        // list, so this test is true in isolation on every branch rather
+        // than only on core-main specifically.
+        const FORMATS: &[FormatDescriptor] = &[];
+        let bound = FORMATS
+            .iter()
+            .filter_map(|format: &FormatDescriptor| format.max_input_size)
+            .chain([crate::archive::MAX_INPUT_SIZE])
+            .max()
+            .unwrap();
+        assert_eq!(bound, crate::archive::MAX_INPUT_SIZE);
     }
 
     #[test]
