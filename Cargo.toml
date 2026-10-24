@@ -25,6 +25,10 @@ path = "native/src/lib.rs"
 crate-type = ["rlib", "cdylib"]
 
 [[test]]
+name = "r7000"
+path = "native/tests/r7000.rs"
+
+[[test]]
 name = "fixtures"
 path = "native/tests/fixtures.rs"
 
