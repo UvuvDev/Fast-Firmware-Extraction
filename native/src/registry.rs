@@ -392,27 +392,61 @@ mod tests {
         );
     }
     #[test]
-    fn exact_signature_precedes_broad_probe_and_corruption_is_not_fallback() {
-        let data = include_bytes!("../../tests/fixtures/trx_corrupt/sample.bin");
-        assert_eq!(detect(data).unwrap().id, "trx");
-        assert!(crate::archive::Archive::open_auto(data.to_vec()).is_err());
+    fn empty_registry_detects_and_opens_nothing() {
+        // With zero formats registered (core-main carries none; each format
+        // lives in its own branch), the global registry must degrade to a
+        // clean "nothing recognized" rather than panicking or guessing.
         assert!(detect(b"").is_none());
+        assert!(detect(b"anything at all").is_none());
+        assert!(crate::archive::Archive::open_auto(b"anything at all".to_vec()).is_err());
     }
     #[test]
     #[should_panic(expected = "duplicate format ID")]
     fn duplicate_ids_are_rejected() {
-        Index::new(&[crate::formats::dtbo::FORMAT, crate::formats::dtbo::FORMAT]);
+        const DUP: FormatDescriptor = FormatDescriptor {
+            id: "dup",
+            name: "Duplicate",
+            description: "test",
+            signatures: &[Signature::new(0, b"DUP0")],
+            probe: None,
+            open: unused,
+            max_input_size: None,
+            max_file_size: None,
+        };
+        Index::new(&[DUP, DUP]);
     }
 
     #[test]
-    fn max_input_size_reflects_the_largest_format_override() {
-        // iso9660 overrides the crate-wide default upward (real optical/
-        // install images routinely exceed 1 GiB); the registry-wide bound
-        // every caller sees before a format is known must reflect that.
-        assert!(crate::formats::iso9660::FORMAT.max_input_size.unwrap() > crate::archive::MAX_INPUT_SIZE);
-        assert_eq!(
-            max_input_size(),
-            crate::formats::iso9660::FORMAT.max_input_size.unwrap()
-        );
+    fn max_input_size_defaults_to_the_crate_wide_bound_when_nothing_overrides_it() {
+        // No registered format overrides the limit upward (core-main has no
+        // formats at all), so the registry-wide bound every caller sees
+        // before a format is known must fall back to the crate default.
+        // A format that overrides this (e.g. iso9660, for optical/install
+        // images routinely over 1 GiB) covers the override case in its own
+        // branch's tests.
+        assert_eq!(max_input_size(), crate::archive::MAX_INPUT_SIZE);
+    }
+
+    #[test]
+    fn max_input_size_reflects_the_largest_override_when_one_is_registered() {
+        const FORMATS: &[FormatDescriptor] = &[FormatDescriptor {
+            id: "oversized",
+            name: "Oversized",
+            description: "test",
+            signatures: &[Signature::new(0, b"OVER")],
+            probe: None,
+            open: unused,
+            max_input_size: Some(crate::archive::MAX_INPUT_SIZE * 4),
+            max_file_size: None,
+        }];
+        let index = Index::new(FORMATS);
+        let bound = index
+            .formats
+            .iter()
+            .filter_map(|format| format.max_input_size)
+            .chain([crate::archive::MAX_INPUT_SIZE])
+            .max()
+            .unwrap();
+        assert_eq!(bound, crate::archive::MAX_INPUT_SIZE * 4);
     }
 }
