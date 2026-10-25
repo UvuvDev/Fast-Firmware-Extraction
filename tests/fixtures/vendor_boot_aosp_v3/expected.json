@@ -1,0 +1,14 @@
+{
+  "sample": "sample.img",
+  "native_format": "boot_image",
+  "children": {
+    "vendor_ramdisk": {
+      "length": 126,
+      "sha256": "ee693dbdba0738e9926a3ca702f770e918ab2d21cb7f11dd5b434ed1ff40460a"
+    },
+    "dtb": {
+      "length": 20,
+      "sha256": "f1862844e547760c5b29e68fe062471a3a4ce4e158b2661fca70f1edccf9a99b"
+    }
+  }
+}
