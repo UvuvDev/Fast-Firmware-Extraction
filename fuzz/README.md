@@ -26,6 +26,20 @@ cargo +nightly fuzz run open_format
 Add `-- -max_total_time=300` (seconds) for a bounded run instead of forever.
 A crash reproduces directly: `cargo +nightly fuzz run open_format fuzz/artifacts/open_format/<name>`.
 
+## A false "crash" you will hit
+
+A format with `max_input_size`/`max_file_size` raised to
+`LARGE_CONTAINER_MAX_SIZE` (16 GiB - ext4, erofs, f2fs, squashfs, ubi,
+ubifs, android_super, cramfs, gpt, iso9660, jffs2) can legitimately drive
+an allocation up to that size. libFuzzer's default `-rss_limit_mb` is 2048
+(2 GiB), far below that, so it will report "out-of-memory" on inputs that
+are completely within that format's own documented policy - not a bug.
+Before trusting an OOM finding against one of these formats, re-run the
+same input with `-rss_limit_mb=0` (unlimited); if it then completes
+immediately, it was this mismatch, not a real missing bound. Pass
+`-rss_limit_mb=18000` (or similar, comfortably above 16 GiB) when fuzzing
+these formats for real to avoid the false positive in the first place.
+
 ## Corpus
 
 `scripts/seed_fuzz_corpus.py` seeds both targets from every real,
