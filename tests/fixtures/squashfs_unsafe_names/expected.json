@@ -1,0 +1,10 @@
+{
+  "sample": "sample.img",
+  "native_format": "squashfs",
+  "children": {
+    "good.txt": {
+      "length": 19,
+      "sha256": "2f5a1581fe7a655a060e8f79224cacfd9389810d245539498ed7be43ba764536"
+    }
+  }
+}

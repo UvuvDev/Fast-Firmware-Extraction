@@ -7,6 +7,7 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 - **NetgearChk** — NETGEAR CHK firmware wrapper (Rust)
 - **Trx** — Broadcom TRX v1/v2 partitions with CRC32 verification (Rust)
 - **LzmaAlone** — LZMA-alone compressed images (Rust)
+- **Squashfs** — SquashFS filesystem (Rust)
 
 Formats land one at a time, each as its own PR. Add a new unpacker with
 **one Rust module under `native/src/formats/` plus fixtures**. Build
@@ -88,3 +89,12 @@ BN_DISABLE_USER_PLUGINS=1 ./scripts/run_tests.sh -v --confcutdir=tests
 
 This isolates unrelated user plugins and keeps pytest from importing the
 hyphenated checkout directory as a Python package.
+
+Squashfs exposes regular files from a SquashFS v4/XZ image; symlinks and
+special nodes are skipped. Uses the `backhand` crate with XZ enabled,
+statically linking liblzma (a C compiler is required to build it); the
+optional GPL LZO backend is disabled. Sets `max_input_size`/`max_file_size`
+to 16 GiB. Rejecting unsafe member names (see above) was confirmed against
+real Debian/Ubuntu content inside a real Ubuntu Desktop ISO, where a single
+bad name among tens of thousands of members would otherwise have hidden
+every one of them.
