@@ -5,6 +5,7 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 ## Supported formats
 
 - **NetgearChk** — NETGEAR CHK firmware wrapper (Rust)
+- **Trx** — Broadcom TRX v1/v2 partitions with CRC32 verification (Rust)
 
 Formats land one at a time, each as its own PR. Add a new unpacker with
 **one Rust module under `native/src/formats/` plus fixtures**. Build
