@@ -70,6 +70,7 @@ version = "0.1.0"
 dependencies = [
  "aho-corasick",
  "crc32fast",
+ "lzma-rust2",
  "serde_json",
  "sha2",
 ]
@@ -95,6 +96,12 @@ name = "libc"
 version = "0.2.191"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "65cd87c9a6d60536580b316ad985726104730a5151c99845f2490428ef91240a"
+
+[[package]]
+name = "lzma-rust2"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fde178a3caf126c440fa15628147772d8ee590a39477d711353fbe2e58a73a5b"
 
 [[package]]
 name = "memchr"
