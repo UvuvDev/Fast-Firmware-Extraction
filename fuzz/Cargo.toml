@@ -1,0 +1,28 @@
+[package]
+name = "firmware-unpack-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.firmware-unpack]
+path = ".."
+
+[[bin]]
+name = "open_auto"
+path = "fuzz_targets/open_auto.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "open_format"
+path = "fuzz_targets/open_format.rs"
+test = false
+doc = false
+bench = false
