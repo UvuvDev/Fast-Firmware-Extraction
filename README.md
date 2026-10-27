@@ -4,6 +4,11 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 
 ## Supported formats
 
+- **NetgearChk** — NETGEAR CHK firmware wrapper (Rust)
+- **Trx** — Broadcom TRX v1/v2 partitions with CRC32 verification (Rust)
+- **LzmaAlone** — LZMA-alone compressed images (Rust)
+- **Squashfs** — SquashFS filesystem (Rust)
+
 Formats land one at a time, each as its own PR. Add a new unpacker with
 **one Rust module under `native/src/formats/` plus fixtures**. Build
 discovery, Python registration, and recursive CLI dispatch are automatic.
@@ -12,8 +17,14 @@ See [the contributor guide](docs/ADDING_A_FORMAT.md) and
 
 ## Rust unpacking
 
-Every format module shares one native core. Tests run without Python or
-Binary Ninja:
+Every format module shares one native core. It also handles the complete
+**NETGEAR R7000** chain: **CHK → TRX → LZMA kernel + SquashFS v4/XZ
+filesystem**. CHK/TRX parsers validate bounds, and TRX verifies CRC32. LZMA
+has dictionary and output limits; SquashFS exposes regular files and skips
+symlinks/specials. The R7000 implementation is verified against the
+vendor's real 1.0.9.88 image; see
+[R7000 validation and fixture provenance](docs/R7000.md) for its hash and
+independent comparison. Tests run without Python or Binary Ninja:
 
 ```sh
 cargo test --locked
@@ -45,18 +56,21 @@ required at runtime. Dependencies are pinned in Cargo.lock.
 For standalone extraction, independent of Binary Ninja:
 
 ```sh
-target/release/firmware-unpack /path/to/firmware-image /path/to/new-output-directory
+target/release/firmware-unpack /path/to/R7000-V1.0.9.88_10.2.88.chk /path/to/new-output-directory
 ```
 
 The CLI detects the input and recursively unpacks all supported native layers.
-Each nested archive gets a sibling `<member>.unpacked/` directory. Each
-archive directory contains `.ffe-paths.tsv`, mapping original paths to
+Each nested archive gets a sibling `<member>.unpacked/` directory. For R7000,
+the kernel is under `firmware.trx.unpacked/kernel.lzma.unpacked/kernel.bin`
+and filesystem files under `firmware.trx.unpacked/rootfs.squashfs.unpacked/`.
+Each archive directory contains `.ffe-paths.tsv`, mapping original paths to
 disk paths and nested directories. Case collisions receive suffixes. The
 output directory must be new. A detected-but-unopenable nested member (an
 unsupported sub-feature, or genuine corruption) is left un-recursed-into with
 a warning on stderr, rather than aborting the rest of the extraction. Total
 output across one run is capped at 64 GiB / 1,000,000 files. Use
-`--list-formats` to view the built registry.
+`--list-formats` to view the built registry. See
+[R7000 validation and fixture provenance](docs/R7000.md).
 
 Most formats cap both the whole input and any single member at 512 MiB/1 GiB
 (`MAX_FILE_SIZE`/`MAX_INPUT_SIZE`), since a firmware partition or header has
@@ -84,3 +98,12 @@ BN_DISABLE_USER_PLUGINS=1 ./scripts/run_tests.sh -v --confcutdir=tests
 
 This isolates unrelated user plugins and keeps pytest from importing the
 hyphenated checkout directory as a Python package.
+
+Squashfs exposes regular files from a SquashFS v4/XZ image; symlinks and
+special nodes are skipped. Uses the `backhand` crate with XZ enabled,
+statically linking liblzma (a C compiler is required to build it); the
+optional GPL LZO backend is disabled. Sets `max_input_size`/`max_file_size`
+to 16 GiB. Rejecting unsafe member names (see above) was confirmed against
+real Debian/Ubuntu content inside a real Ubuntu Desktop ISO, where a single
+bad name among tens of thousands of members would otherwise have hidden
+every one of them.

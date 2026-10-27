@@ -1,0 +1,2 @@
+cargo:rerun-if-changed=/Users/bradleyfernandez/plugins/Fast-Firmware-Extraction/native/src/formats
+cargo:rerun-if-changed=/Users/bradleyfernandez/plugins/Fast-Firmware-Extraction/native/src/formats/boot_image.rs
