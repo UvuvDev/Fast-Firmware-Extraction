@@ -1,0 +1,10 @@
+{
+  "sample": "sample.img",
+  "native_format": "uboot_legacy",
+  "children": {
+    "kernel.bin": {
+      "length": 425,
+      "sha256": "e0bab1478619d9e75b9849d05d201cd640ee0fb89c66180a05cb4d87c94c10af"
+    }
+  }
+}

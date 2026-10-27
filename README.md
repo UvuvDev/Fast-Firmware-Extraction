@@ -4,6 +4,8 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 
 ## Supported formats
 
+- **UBootLegacyImage** — U-Boot legacy image (uImage), single and multi-file, CRC32-verified (Rust)
+
 Formats land one at a time, each as its own PR. Add a new unpacker with
 **one Rust module under `native/src/formats/` plus fixtures**. Build
 discovery, Python registration, and recursive CLI dispatch are automatic.
@@ -84,3 +86,12 @@ BN_DISABLE_USER_PLUGINS=1 ./scripts/run_tests.sh -v --confcutdir=tests
 
 This isolates unrelated user plugins and keeps pytest from importing the
 hyphenated checkout directory as a Python package.
+
+UBootLegacyImage verifies both the 64-byte header's CRC32 and the data CRC32
+(plain zlib CRC32, checked against real `mkimage`/`dumpimage` output) before
+exposing the payload. A multi-file image (kernel+initrd+dtb combined with
+`-T multi`) is split into `data00.bin`, `data01.bin`, ... using the embedded
+big-endian size table and its 4-byte inter-image padding; every other type is
+exposed as one named file (`kernel.bin`, `ramdisk.bin`, `fdt.bin`, ...).
+Compressed payloads (ih_comp != none) are returned as stored bytes; nested
+detection decodes any payload this crate otherwise recognizes.

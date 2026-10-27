@@ -1,0 +1,5 @@
+{
+  "sample": "sample.img",
+  "native_format": "uboot_legacy",
+  "expect_failure": true
+}
