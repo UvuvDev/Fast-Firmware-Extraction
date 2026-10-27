@@ -1,0 +1,5 @@
+{
+  "sample": "sample.bin",
+  "expect_failure": true,
+  "native_format": "fwtype_header"
+}

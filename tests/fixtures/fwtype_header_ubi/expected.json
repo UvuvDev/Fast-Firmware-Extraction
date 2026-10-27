@@ -1,0 +1,10 @@
+{
+  "sample": "sample.bin",
+  "native_format": "fwtype_header",
+  "children": {
+    "payload.bin": {
+      "length": 1024,
+      "sha256": "c40ab780d0d76b5810c9a0863d3f3c064664a8ea219074360ef8e88f2f5c3e8f"
+    }
+  }
+}
