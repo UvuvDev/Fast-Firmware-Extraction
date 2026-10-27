@@ -4,6 +4,8 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 
 ## Supported formats
 
+- **Iso9660** — ISO 9660 optical disc image, Joliet/Rock Ridge (Rust)
+
 Formats land one at a time, each as its own PR. Add a new unpacker with
 **one Rust module under `native/src/formats/` plus fixtures**. Build
 discovery, Python registration, and recursive CLI dispatch are automatic.
@@ -84,3 +86,15 @@ BN_DISABLE_USER_PLUGINS=1 ./scripts/run_tests.sh -v --confcutdir=tests
 
 This isolates unrelated user plugins and keeps pytest from importing the
 hyphenated checkout directory as a Python package.
+
+Iso9660 reads one directory tree, picked in priority order: a Supplementary
+Volume Descriptor carrying the Joliet escape sequence (simple UTF-16BE
+names, used as-is), else the Primary Volume Descriptor's tree, preferring
+each record's Rock Ridge "NM" (POSIX name) entry when present, else its
+plain ISO 9660 name with the ";version" suffix stripped. Only a 2048-byte
+logical block size is supported; multi-extent records (files split across
+several directory records, generally only seen well past 4 GiB) and Rock
+Ridge continuation ("CE") entries are not. El Torito boot images and
+multiple sessions are not inspected. Sets `max_input_size`/`max_file_size`
+to 16 GiB (real optical/install images routinely exceed 1 GiB). See
+[ISO 9660 fixture provenance](tests/fixture_sources/iso9660/README.md).

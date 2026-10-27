@@ -1,0 +1,53 @@
+{
+  "xorriso_version": "GNU xorriso 1.5.8.pl02",
+  "commands": [
+    [
+      "xorriso",
+      "-as",
+      "mkisofs",
+      "-J",
+      "-R",
+      "-V",
+      "FFETEST",
+      "--modification-date=2000010100000000",
+      "-o",
+      "test.iso",
+      "root"
+    ],
+    [
+      "xorriso",
+      "-as",
+      "mkisofs",
+      "-R",
+      "-V",
+      "FFERR",
+      "--modification-date=2000010100000000",
+      "-o",
+      "test_rr.iso",
+      "root"
+    ],
+    [
+      "xorriso",
+      "-indev",
+      "test.iso",
+      "-find",
+      "/",
+      "-type",
+      "f"
+    ]
+  ],
+  "inputs": {
+    "small.txt": "df62a7dc724cfef85cd7ac6b2984004256647848b94f8430c1edf185de50ebec",
+    "subdir/nested.txt": "a28a2cbe6e81b1645fc76c781926e3bf42e0f62a53470b7dd0e18e4a84d95013",
+    "big.bin": "16165bc66a50fcaa1e33af6ea86b1a4ec7baf3ffba93786047f3d467a4d738b0"
+  },
+  "corrupt_field": "PVD version byte (offset 16*2048+6)",
+  "artifacts": {
+    "tests/fixtures/iso9660/sample.iso": "bb3497a7d3f2a7399ce72d14ec3e3df55f95ad6660a76b93cf41714ec50e56be",
+    "tests/fixtures/iso9660/expected.json": "b23422c44ab6930b2d146a8d7faeb7eaaa1addf8f9257310e696d01f86e38377",
+    "tests/fixtures/iso9660_rockridge_only/sample.iso": "beaaa65baacd17eb9aee11be5c97fce40f390faf7d4b228f2ca1b83b8b96733c",
+    "tests/fixtures/iso9660_rockridge_only/expected.json": "b23422c44ab6930b2d146a8d7faeb7eaaa1addf8f9257310e696d01f86e38377",
+    "tests/fixtures/iso9660_corrupt/sample.iso": "820f4ebe69b81e7a194eafab062b56ce383d07e0ae0faa15156c858b935da9bf",
+    "tests/fixtures/iso9660_corrupt/expected.json": "f4f85d069cfe11982da8b3a9bb137a97bdd3c8a60ea085dd408cafc6b502d0b2"
+  }
+}
