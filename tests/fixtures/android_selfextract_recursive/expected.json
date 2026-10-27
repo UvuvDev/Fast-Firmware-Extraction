@@ -1,0 +1,6 @@
+{
+  "sample": "sample.sh",
+  "native_format": "android_selfextract",
+  "transform": "AndroidSelfExtract",
+  "expect_failure": true
+}

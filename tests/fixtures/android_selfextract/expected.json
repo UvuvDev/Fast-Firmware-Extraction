@@ -1,0 +1,10 @@
+{
+  "sample": "sample.sh",
+  "children": {
+    "payload.gz": {
+      "length": 41,
+      "sha256": "13fe3fcfc129bb533e626170cbc35a9983ac7039aa89c9f25870b6d6e8f26139"
+    }
+  },
+  "native_format": "android_selfextract"
+}
