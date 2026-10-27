@@ -4,6 +4,8 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 
 ## Supported formats
 
+- **Jffs2** — JFFS2 flash filesystem, little-endian (Rust)
+
 Formats land one at a time, each as its own PR. Add a new unpacker with
 **one Rust module under `native/src/formats/` plus fixtures**. Build
 discovery, Python registration, and recursive CLI dispatch are automatic.
@@ -84,3 +86,16 @@ BN_DISABLE_USER_PLUGINS=1 ./scripts/run_tests.sh -v --confcutdir=tests
 
 This isolates unrelated user plugins and keeps pytest from importing the
 hyphenated checkout directory as a Python package.
+
+Jffs2 has no on-flash index: it scans every dirent/inode node in log order,
+keeping the highest "version" per (parent, name) (a dirent with target inode
+0 deletes that name) and per inode number, since a later version may cover
+only part of a file. Node CRCs use JFFS2's own CRC32 variant (reflected,
+seeded with 0, no final XOR), distinct from the zlib-compatible CRC32 this
+crate uses elsewhere for TRX/uImage; it is verified on every node, including
+each fragment's data CRC, eagerly during discovery, so corrupting a
+fragment's stored bytes (not just its decompressed form) is caught by
+open() alone. Only little-endian images and NONE/ZERO/COPY/ZLIB compression
+are supported; the legacy 0x1984 magic, big-endian images, and the RTIME/
+RUBINMIPS/DYNRUBIN/LZO/LZMA compressors are not. Uses the `miniz_oxide`
+crate. See [JFFS2 fixture provenance](tests/fixture_sources/jffs2/README.md).
