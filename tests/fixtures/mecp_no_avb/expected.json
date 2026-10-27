@@ -1,0 +1,14 @@
+{
+  "sample": "sample.img",
+  "children": {
+    "modem": {
+      "length": 1024,
+      "sha256": "e9183d9a79aad8a047b8e67981210d50b01fc75b1edba5bc32ba3d3ec4d5056d"
+    },
+    "cp_bootcode": {
+      "length": 16,
+      "sha256": "4b8dd4800791d933c2cfbfab19e1c22e755b025480e1b0fcf969853fe14e45d1"
+    }
+  },
+  "native_format": "mecp"
+}
