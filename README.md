@@ -4,6 +4,8 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 
 ## Supported formats
 
+- **AndroidSparse** — Android Sparse Image (Rust)
+
 Formats land one at a time, each as its own PR. Add a new unpacker with
 **one Rust module under `native/src/formats/` plus fixtures**. Build
 discovery, Python registration, and recursive CLI dispatch are automatic.
@@ -84,3 +86,8 @@ BN_DISABLE_USER_PLUGINS=1 ./scripts/run_tests.sh -v --confcutdir=tests
 
 This isolates unrelated user plugins and keeps pytest from importing the
 hyphenated checkout directory as a Python package.
+
+Android sparse preserves the automatic decoded child in Container Browser.
+Its CLI output is `image.raw`. RAW, FILL, DONT_CARE, and CRC32 chunks are
+validated, including supplied checksums, before exposing output; expansion
+uses the common 512 MiB per-file limit.

@@ -1,0 +1,10 @@
+{
+  "sample": "sample.img",
+  "native_format": "sparse_image",
+  "children": {
+    "": {
+      "length": 24,
+      "sha256": "e191e76a90d38bed0f44320d5056f560904127cce9bc59c897f692f1ad80be9f"
+    }
+  }
+}
