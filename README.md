@@ -4,6 +4,8 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 
 ## Supported formats
 
+- **Cramfs** — CramFS filesystem, zlib-compressed (Rust)
+
 Formats land one at a time, each as its own PR. Add a new unpacker with
 **one Rust module under `native/src/formats/` plus fixtures**. Build
 discovery, Python registration, and recursive CLI dispatch are automatic.
@@ -84,3 +86,11 @@ BN_DISABLE_USER_PLUGINS=1 ./scripts/run_tests.sh -v --confcutdir=tests
 
 This isolates unrelated user plugins and keeps pytest from importing the
 hyphenated checkout directory as a Python package.
+
+Cramfs walks the modern FSID_VERSION_2 superblock layout and decompresses
+each file's zlib-wrapped 4 KiB blocks on read, verifying each block's
+Adler-32 trailer. A zero-length block is treated as a hole (zero bytes)
+regardless of the advisory HOLES flag; any other flag bit, including the
+legacy pre-FSID_VERSION_2 superblock, SHIFTED_ROOT_OFFSET, or
+WRONG_SIGNATURE, is rejected rather than guessed at. Uses the `miniz_oxide`
+crate. See [CramFS fixture provenance](tests/fixture_sources/cramfs/README.md).
