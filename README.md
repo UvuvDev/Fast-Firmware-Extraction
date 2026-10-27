@@ -4,6 +4,8 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 
 ## Supported formats
 
+- **Apbl** — Google APBL v2 wrapper with SHA-384 verification (Rust)
+
 Formats land one at a time, each as its own PR. Add a new unpacker with
 **one Rust module under `native/src/formats/` plus fixtures**. Build
 discovery, Python registration, and recursive CLI dispatch are automatic.
@@ -84,3 +86,9 @@ BN_DISABLE_USER_PLUGINS=1 ./scripts/run_tests.sh -v --confcutdir=tests
 
 This isolates unrelated user plugins and keeps pytest from importing the
 hyphenated checkout directory as a Python package.
+
+APBL supports the observed Google v2 layout with a 0x5000-byte prefix. It checks
+the stored SHA-384 payload digest and exposes payload.bin; cryptographic signing
+metadata is not authenticated. The executable can then expose embedded BLFS
+resources, whose LZ4 streams decode automatically. Uses the `sha2` crate. See
+[Cubs ABL validation](tests/fixture_sources/cubs_abl/README.md).
