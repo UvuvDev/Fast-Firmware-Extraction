@@ -4,6 +4,8 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 
 ## Supported formats
 
+- **UBootFit** — U-Boot Flattened Image Tree (FIT) devicetree images (Rust)
+
 Formats land one at a time, each as its own PR. Add a new unpacker with
 **one Rust module under `native/src/formats/` plus fixtures**. Build
 discovery, Python registration, and recursive CLI dispatch are automatic.
@@ -84,3 +86,11 @@ BN_DISABLE_USER_PLUGINS=1 ./scripts/run_tests.sh -v --confcutdir=tests
 
 This isolates unrelated user plugins and keeps pytest from importing the
 hyphenated checkout directory as a Python package.
+
+UBootFit walks a Flattened Image Tree's devicetree structure block far enough
+to read each `/images/*` subnode's `data` property, without being a general
+FDT/overlay reader. A devicetree blob sharing the same magic but lacking an
+`/images` node (an ordinary `.dtb`, say) is rejected rather than misreported.
+External-data FIT images, whose image data lives outside the devicetree
+blob instead of inline, are not supported. See
+[U-Boot fixture provenance](tests/fixture_sources/uboot/README.md).
