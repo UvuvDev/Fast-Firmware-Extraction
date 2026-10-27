@@ -1,0 +1,5 @@
+{
+  "sample": "sample.img",
+  "expect_failure": true,
+  "native_format": "dtbo"
+}
