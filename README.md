@@ -4,6 +4,8 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 
 ## Supported formats
 
+- **Erofs** — EROFS filesystem (uncompressed, Rust)
+
 Formats land one at a time, each as its own PR. Add a new unpacker with
 **one Rust module under `native/src/formats/` plus fixtures**. Build
 discovery, Python registration, and recursive CLI dispatch are automatic.
@@ -84,3 +86,10 @@ BN_DISABLE_USER_PLUGINS=1 ./scripts/run_tests.sh -v --confcutdir=tests
 
 This isolates unrelated user plugins and keeps pytest from importing the
 hyphenated checkout directory as a Python package.
+
+EROFS handles flat files, inline tails, compact/extended inodes and single-device
+chunk mappings. Compressed inodes, metabox, global 48BIT addressing, multiple
+devices and checksum verification remain unsupported. Filesystem readers expose
+regular files and skip symlinks and special nodes. Sets `max_input_size`/
+`max_file_size` to 16 GiB (a multi-GiB filesystem nested inside a disk image
+is routine).
