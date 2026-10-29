@@ -5,14 +5,25 @@
 //! tiers. No inline xattrs, compression, encryption, checkpoint-payload overflow,
 //! NAT journal/roll-forward replay, or checksum verification. Synthetic coverage
 //! only; see tests/fixture_sources/f2fs/README.md for the supported scope.
+//!
+//! This port performs additional consistency checks beyond the Python reference:
+//! node-footer identity validation (nid/owner cross-check), checkpoint-flag
+//! rejection for unsupported modes (large-NAT-bitmap, disabled, error), conflicting
+//! inline-flag rejection (both inline-data and inline-dentry set), and directory
+//! continuation-bitmap consistency (all slots of a multi-slot name must be set).
 use crate::archive::{ArchiveReader, LARGE_CONTAINER_MAX_SIZE, MAX_MEMBERS, Result, validate_name};
 use crate::bytes::{get, le32};
 use crate::registry::{FormatDescriptor, Signature};
 use std::{collections::HashSet, ops::Range};
 
 const BS: usize = 4096;
-const ADDRS: usize = (BS - 360 - 20 - 24) / 4;
-const PTRS: usize = (BS - 24) / 4;
+const OFFSET_END_I_EXT: usize = 360; // byte offset right after f2fs_inode.i_ext
+const SIZE_I_NID: usize = 20; // DEF_NIDS_PER_INODE(5) * sizeof(__le32)
+const NODE_FOOTER_SIZE: usize = 24; // nid(4) + ino(4) + flag(4) + cp_ver(8) + next_blkaddr(4)
+const DIR_ENTRY_SIZE: usize = 11; // hash_code(4) + ino(4) + name_len(2) + file_type(1)
+const SLOT_LEN: usize = 8; // F2FS_SLOT_LEN: filename slot length in bytes
+const ADDRS: usize = (BS - OFFSET_END_I_EXT - SIZE_I_NID - NODE_FOOTER_SIZE) / 4;
+const PTRS: usize = (BS - NODE_FOOTER_SIZE) / 4;
 pub const FORMAT: FormatDescriptor = FormatDescriptor {
     id: "f2fs",
     name: "F2fs",
@@ -146,7 +157,9 @@ impl F2fs {
             return Err("unallocated F2FS node".into());
         }
         let bytes = self.block(address as u64)?;
-        if le32(bytes, BS - 24)? != nid || le32(bytes, BS - 20)? != nat_owner || nat_owner != owner
+        if le32(bytes, BS - NODE_FOOTER_SIZE)? != nid
+            || le32(bytes, BS - NODE_FOOTER_SIZE + 4)? != nat_owner
+            || nat_owner != owner
         {
             return Err("F2FS NAT/node footer owner or ID mismatch".into());
         }
@@ -171,7 +184,7 @@ impl F2fs {
             return Err("F2FS inline xattrs unsupported".into());
         }
         let extra = if flags & 0x20 != 0 {
-            u16le(raw, 360)? as usize
+            u16le(raw, OFFSET_END_I_EXT)? as usize
         } else {
             0
         };
@@ -179,11 +192,11 @@ impl F2fs {
             return Err("invalid F2FS extra attribute size".into());
         }
         let count = ADDRS - extra / 4;
-        let start = range.start + 360 + extra;
-        let end = range.start + 360 + ADDRS * 4;
+        let start = range.start + OFFSET_END_I_EXT + extra;
+        let end = range.start + OFFSET_END_I_EXT + ADDRS * 4;
         let mut nodes = [0; 5];
         for (i, pointer) in nodes.iter_mut().enumerate() {
-            *pointer = le32(raw, 360 + ADDRS * 4 + i * 4)?;
+            *pointer = le32(raw, OFFSET_END_I_EXT + ADDRS * 4 + i * 4)?;
         }
         let inline = if flags & 6 != 0 {
             if count < 1 {
@@ -349,13 +362,17 @@ impl F2fs {
     }
 }
 fn dentries(bytes: &[u8]) -> Result<Vec<(String, u32, u8)>> {
-    let count = bytes.len() * 8 / 153;
+    // NR_DENTRY_IN_BLOCK kernel formula: (payload_bytes * 8) / ((DIR_ENTRY_SIZE + SLOT_LEN) * 8 + 1)
+    let count = bytes.len() * 8 / ((DIR_ENTRY_SIZE + SLOT_LEN) * 8 + 1);
     if count == 0 {
         return Err("F2FS directory region too small".into());
     }
+    // Buffer layout from end to start: [bitmap (bitmap_size bytes)][reserved padding]
+    // [dentry records (count * DIR_ENTRY_SIZE bytes)][filenames (count * SLOT_LEN bytes)]
+    // Offsets computed backward from buffer end for names and records; bitmap is at start.
     let bitmap_size = count.div_ceil(8);
-    let names = bytes.len() - count * 8;
-    let records = names - count * 11;
+    let names = bytes.len() - count * SLOT_LEN;
+    let records = names - count * DIR_ENTRY_SIZE;
     if records < bitmap_size {
         return Err("invalid F2FS directory geometry".into());
     }
@@ -367,9 +384,9 @@ fn dentries(bytes: &[u8]) -> Result<Vec<(String, u32, u8)>> {
             slot += 1;
             continue;
         }
-        let entry = get(bytes, records + slot * 11, 11)?;
+        let entry = get(bytes, records + slot * DIR_ENTRY_SIZE, DIR_ENTRY_SIZE)?;
         let length = u16le(entry, 8)? as usize;
-        let slots = length.div_ceil(8);
+        let slots = length.div_ceil(SLOT_LEN);
         if length == 0
             || length > 255
             || slot + slots > count
@@ -377,7 +394,8 @@ fn dentries(bytes: &[u8]) -> Result<Vec<(String, u32, u8)>> {
         {
             return Err("invalid F2FS directory name/slot bitmap".into());
         }
-        let name = String::from_utf8_lossy(get(bytes, names + slot * 8, length)?).into_owned();
+        let name =
+            String::from_utf8_lossy(get(bytes, names + slot * SLOT_LEN, length)?).into_owned();
         if name != "." && name != ".." {
             validate_name(&name)?;
             if name.contains('/') {
@@ -481,43 +499,71 @@ mod tests {
         assert!(dentries(&fs.data[range]).is_err());
     }
     #[test]
-    fn rejects_unsupported_inodes_and_checkpoint_layouts() {
-        for (offset, value) in [
-            (40 * BS + 3, 1),
-            (40 * BS + 80, 4),
-            (1024 + 1664, 1),
-            (16 * BS + 132, 0x400),
-        ] {
-            let mut data = sample();
-            put32(&mut data, offset, value);
-            assert!(open(data).is_err());
-        }
+    fn rejects_inline_xattr_inode() {
         let mut data = sample();
-        data[40 * BS + 2] |= 4;
-        assert!(open(data).is_err());
-        // i_size is a full 64-bit field; only setting its low 32 bits (as
-        // u32::MAX) stays under the raised LARGE_CONTAINER_MAX_SIZE limit.
-        let mut data = sample();
-        data[41 * BS + 16..41 * BS + 24].copy_from_slice(&(20_u64 * 1024 * 1024 * 1024).to_le_bytes());
+        put32(&mut data, 40 * BS + 3, 1);
         assert!(open(data).is_err());
     }
     #[test]
-    fn validates_nat_and_node_footer() {
+    fn rejects_compressed_inode() {
+        let mut data = sample();
+        put32(&mut data, 40 * BS + 80, 4);
+        assert!(open(data).is_err());
+    }
+    #[test]
+    fn rejects_checkpoint_payload_overflow() {
+        let mut data = sample();
+        put32(&mut data, 1024 + 1664, 1);
+        assert!(open(data).is_err());
+    }
+    #[test]
+    fn rejects_unsupported_checkpoint_flags() {
+        let mut data = sample();
+        put32(&mut data, 16 * BS + 132, 0x400);
+        assert!(open(data).is_err());
+    }
+    #[test]
+    fn rejects_encrypted_inode() {
+        let mut data = sample();
+        data[40 * BS + 2] |= 4;
+        assert!(open(data).is_err());
+    }
+    #[test]
+    fn rejects_oversized_inode_size() {
+        // i_size is a full 64-bit field; only setting its low 32 bits (as
+        // u32::MAX) stays under the raised LARGE_CONTAINER_MAX_SIZE limit.
+        let mut data = sample();
+        data[41 * BS + 16..41 * BS + 24]
+            .copy_from_slice(&(20_u64 * 1024 * 1024 * 1024).to_le_bytes());
+        assert!(open(data).is_err());
+    }
+    #[test]
+    fn rejects_unallocated_nat_address() {
         let mut data = sample();
         put32(&mut data, 24 * BS + 3 * 9 + 5, u32::MAX);
         assert!(open(data).is_err());
+    }
+    #[test]
+    fn rejects_node_footer_mismatch() {
         let mut data = sample();
-        put32(&mut data, 40 * BS + BS - 24, 99);
+        put32(&mut data, 40 * BS + BS - NODE_FOOTER_SIZE, 99);
         assert!(open(data).is_err());
+    }
+    #[test]
+    fn rejects_empty_nat_bitmap() {
         let mut fs = reader();
         fs.bitmap.clear();
         assert!(fs.node(3, 3).is_err());
     }
     #[test]
-    fn rejects_extra_attribute_and_inline_bounds() {
+    fn rejects_invalid_extra_attribute_size() {
         let mut data = sample();
-        data[42 * BS + 360..42 * BS + 362].copy_from_slice(&3u16.to_le_bytes());
+        data[42 * BS + OFFSET_END_I_EXT..42 * BS + OFFSET_END_I_EXT + 2]
+            .copy_from_slice(&3u16.to_le_bytes());
         assert!(open(data).is_err());
+    }
+    #[test]
+    fn rejects_inline_file_exceeding_capacity() {
         let fs = reader();
         let mut inode = fs.inode(4).unwrap();
         inode.size = BS;
@@ -529,14 +575,14 @@ mod tests {
         let root = fs.inode(3).unwrap();
         let range = root.inline.unwrap();
         let mut bytes = fs.data[range].to_vec();
-        let count = bytes.len() * 8 / 153;
-        let records = bytes.len() - 19 * count;
+        let count = bytes.len() * 8 / ((DIR_ENTRY_SIZE + SLOT_LEN) * 8 + 1);
+        let records = bytes.len() - (DIR_ENTRY_SIZE + SLOT_LEN) * count;
         bytes[records + 8..records + 10].copy_from_slice(&256u16.to_le_bytes());
         assert!(dentries(&bytes).is_err());
         let mut bytes = vec![0; BS];
-        let count = bytes.len() * 8 / 153;
-        let records = bytes.len() - 19 * count;
-        let names = bytes.len() - 8 * count;
+        let count = bytes.len() * 8 / ((DIR_ENTRY_SIZE + SLOT_LEN) * 8 + 1);
+        let records = bytes.len() - (DIR_ENTRY_SIZE + SLOT_LEN) * count;
+        let names = bytes.len() - SLOT_LEN * count;
         bytes[0] = 1;
         bytes[records + 8..records + 10].copy_from_slice(&9u16.to_le_bytes());
         bytes[names..names + 9].copy_from_slice(b"long_name");
@@ -552,8 +598,12 @@ mod tests {
             let nat = 24 * BS + nid * 9;
             put32(&mut fs.data, nat + 1, 5);
             put32(&mut fs.data, nat + 5, physical as u32);
-            put32(&mut fs.data, physical * BS + BS - 24, nid as u32);
-            put32(&mut fs.data, physical * BS + BS - 20, 5);
+            put32(
+                &mut fs.data,
+                physical * BS + BS - NODE_FOOTER_SIZE,
+                nid as u32,
+            );
+            put32(&mut fs.data, physical * BS + BS - NODE_FOOTER_SIZE + 4, 5);
         }
         for depth in 0..=2 {
             put32(&mut fs.data, 50 * BS, if depth == 0 { 36 } else { 9 });
