@@ -4,6 +4,8 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 
 ## Supported formats
 
+- **Ext4** — ext4 filesystem (Rust)
+
 Formats land one at a time, each as its own PR. Add a new unpacker with
 **one Rust module under `native/src/formats/` plus fixtures**. Build
 discovery, Python registration, and recursive CLI dispatch are automatic.
@@ -84,3 +86,9 @@ BN_DISABLE_USER_PLUGINS=1 ./scripts/run_tests.sh -v --confcutdir=tests
 
 This isolates unrelated user plugins and keeps pytest from importing the
 hyphenated checkout directory as a Python package.
+
+Ext4 supports standard/padless superblocks, extent trees, direct through
+triple-indirect mappings, sparse/unwritten blocks, and small inline files.
+Inline directories/xattr overflow, journal replay, meta_bg, encryption, casefold,
+and checksum verification are outside the current implementation. Sets
+`max_input_size`/`max_file_size` to 16 GiB.
