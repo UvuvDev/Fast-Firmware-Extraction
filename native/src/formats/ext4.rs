@@ -2,18 +2,32 @@
 //! Standard and padless superblocks, 32/64-byte group descriptors, extent
 //! trees and classic direct through triple-indirect pointers. Unwritten
 //! extents and holes read as zeroes. No journal replay or checksum validation.
+//! Two fixes beyond the Python reference: unwritten extents (the high bit of
+//! an extent's length field) are tracked and read as zero instead of exposing
+//! stale disk bytes; and 64 KiB-block directory records encode a whole-block
+//! entry as rec_len 0 or 0xFFFF since u16 cannot hold 65536.
 use crate::archive::{ArchiveReader, LARGE_CONTAINER_MAX_SIZE, MAX_MEMBERS, Result, validate_name};
 use crate::bytes::{get, le32};
 use crate::registry::{FormatDescriptor, Signature};
 use std::collections::HashSet;
+
+const S_IFMT: u16 = 0xf000;
+const S_IFDIR: u16 = 0x4000;
+const S_IFREG: u16 = 0x8000;
+const INCOMPAT_64BIT: u32 = 0x80;
+const EXT4_EXTENTS_FL: u32 = 0x80000;
+const EXT4_INLINE_DATA_FL: u32 = 0x10000000;
+const EXTENT_HEADER_MAGIC: u16 = 0xf30a;
+const EXT4_MAGIC: u16 = 0xef53;
+const EXT4_MAGIC_LE: [u8; 2] = EXT4_MAGIC.to_le_bytes();
 
 pub const FORMAT: FormatDescriptor = FormatDescriptor {
     id: "ext4",
     name: "Ext4",
     description: "ext4 filesystem",
     signatures: &[
-        Signature::new(1080, b"\x53\xef"),
-        Signature::new(56, b"\x53\xef"),
+        Signature::new(1080, &EXT4_MAGIC_LE),
+        Signature::new(56, &EXT4_MAGIC_LE),
     ],
     probe: Some(probe),
     open,
@@ -86,7 +100,7 @@ impl Ext4 {
         let raw = get(&self.data, offset, self.inode_size)?;
         let mode = u16le(raw, 0)?;
         let size = le32(raw, 4)? as u64
-            | if mode & 0xf000 == 0x8000 {
+            | if mode & S_IFMT == S_IFREG {
                 (le32(raw, 108)? as u64) << 32
             } else {
                 0
@@ -113,7 +127,7 @@ impl Ext4 {
             .ok_or("ext4 extent metadata limit exceeded")?;
         let count = u16le(bytes, 2)? as usize;
         let depth = u16le(bytes, 6)?;
-        if u16le(bytes, 0)? != 0xf30a
+        if u16le(bytes, 0)? != EXTENT_HEADER_MAGIC
             || depth > 5
             || expected.is_some_and(|d| d != depth)
             || count > u16le(bytes, 4)? as usize
@@ -194,7 +208,7 @@ impl Ext4 {
     fn extents(&self, inode: &Inode) -> Result<Vec<Extent>> {
         let mut result = Vec::new();
         let mut budget = MAX_MEMBERS;
-        if inode.flags & 0x80000 != 0 {
+        if inode.flags & EXT4_EXTENTS_FL != 0 {
             self.extent_tree(&inode.blocks, None, &mut result, &mut budget)?;
         } else {
             let limit = inode.size.div_ceil(self.bs) as u64;
@@ -232,8 +246,8 @@ impl Ext4 {
         Ok(result)
     }
     fn content(&self, inode: &Inode) -> Result<Vec<u8>> {
-        if inode.flags & 0x10000000 != 0 {
-            if inode.mode & 0xf000 == 0x4000 || inode.size > 60 {
+        if inode.flags & EXT4_INLINE_DATA_FL != 0 {
+            if inode.mode & S_IFMT == S_IFDIR || inode.size > 60 {
                 return Err("ext4 inline directories/xattr overflow unsupported".into());
             }
             return Ok(inode.blocks[..inode.size].to_vec());
@@ -299,8 +313,8 @@ impl Ext4 {
                 return Err("ext4 traversal limit exceeded".into());
             }
             let inode = self.inode(ino)?;
-            match inode.mode & 0xf000 {
-                0x4000 => {
+            match inode.mode & S_IFMT {
+                S_IFDIR => {
                     if !visited.insert(ino) {
                         return Err("ext4 directory cycle or repeated directory".into());
                     }
@@ -317,7 +331,7 @@ impl Ext4 {
                         pending.push((name, child, depth + 1));
                     }
                 }
-                0x8000 => {
+                S_IFREG => {
                     self.names.push(path);
                     self.files.push(inode);
                 }
@@ -346,7 +360,7 @@ fn superblock(data: &[u8]) -> Option<usize> {
         let Ok(sb) = get(data, base, 0x160) else {
             return false;
         };
-        u16le(sb, 56).ok() == Some(0xef53)
+        u16le(sb, 56).ok() == Some(EXT4_MAGIC)
             && le32(sb, 24).is_ok_and(|n| n <= 6)
             && le32(sb, 32).is_ok_and(|n| n != 0)
             && le32(sb, 40).is_ok_and(|n| n != 0)
@@ -379,7 +393,7 @@ fn open(data: Vec<u8>) -> Result<Box<dyn ArchiveReader>> {
                 .into(),
         );
     }
-    let wide = incompat & 0x80 != 0;
+    let wide = incompat & INCOMPAT_64BIT != 0;
     let total = le32(sb, 4)? as u64
         | if wide {
             (le32(sb, 0x150)? as u64) << 32
@@ -418,7 +432,7 @@ fn open(data: Vec<u8>) -> Result<Box<dyn ArchiveReader>> {
         names: Vec::new(),
         files: Vec::new(),
     };
-    if fs.inode(2)?.mode & 0xf000 != 0x4000 {
+    if fs.inode(2)?.mode & S_IFMT != S_IFDIR {
         return Err("ext4 root is not a directory".into());
     }
     fs.index()?;
@@ -447,7 +461,7 @@ mod tests {
     }
     fn inode(size: usize) -> Inode {
         Inode {
-            mode: 0x8000,
+            mode: S_IFREG,
             size,
             flags: 0,
             blocks: [0; 60],
@@ -482,7 +496,7 @@ mod tests {
         let mut fs = reader();
         fs.data[7 * 1024..].fill(42);
         let mut node = inode(1024);
-        node.flags = 0x80000;
+        node.flags = EXT4_EXTENTS_FL;
         node.blocks[..8].copy_from_slice(&[0x0a, 0xf3, 1, 0, 4, 0, 0, 0]);
         node.blocks[16..18].copy_from_slice(&0x8001u16.to_le_bytes());
         put32(&mut node.blocks, 20, 7);
@@ -494,7 +508,7 @@ mod tests {
     fn rejects_extent_cycles_and_overlap() {
         let mut fs = reader();
         let mut node = inode(1024);
-        node.flags = 0x80000;
+        node.flags = EXT4_EXTENTS_FL;
         node.blocks[..8].copy_from_slice(&[0x0a, 0xf3, 1, 0, 4, 0, 1, 0]);
         put32(&mut node.blocks, 16, 3);
         fs.data[3072..3132].copy_from_slice(&node.blocks);
@@ -505,23 +519,34 @@ mod tests {
         assert!(fs.content(&node).is_err());
     }
     #[test]
-    fn inline_bounds_and_oversized_inode() {
+    fn reads_inline_data() {
         let fs = reader();
         let mut node = inode(4);
-        node.flags = 0x10000000;
+        node.flags = EXT4_INLINE_DATA_FL;
         node.blocks[..4].copy_from_slice(b"data");
         assert_eq!(fs.content(&node).unwrap(), b"data");
-        node.size = 61;
+    }
+    #[test]
+    fn rejects_inline_data_exceeding_capacity() {
+        let fs = reader();
+        let mut node = inode(61);
+        node.flags = EXT4_INLINE_DATA_FL;
         assert!(fs.content(&node).is_err());
+    }
+    #[test]
+    fn rejects_oversized_inode() {
         let mut data = sample();
         put32(&mut data, 3200 + 4, u32::MAX);
         assert!(open(data).is_err());
     }
     #[test]
-    fn rejects_directory_corruption_and_unsupported_features() {
+    fn rejects_corrupt_directory_record_length() {
         let mut data = sample();
         data[4096 + 4..4096 + 6].copy_from_slice(&4u16.to_le_bytes());
         assert!(open(data).is_err());
+    }
+    #[test]
+    fn rejects_unsupported_incompat_feature() {
         let mut data = sample();
         put32(&mut data, 1024 + 96, 0x10000);
         assert!(open(data).is_err());
@@ -540,7 +565,7 @@ mod tests {
         fs.bs = 65536;
         fs.data = vec![0; 131072];
         let mut node = inode(65536);
-        node.mode = 0x4000;
+        node.mode = S_IFDIR;
         put32(&mut node.blocks, 0, 1);
         put32(&mut fs.data, 65536, 3);
         fs.data[65540..65542].copy_from_slice(&u16::MAX.to_le_bytes());
@@ -555,10 +580,10 @@ mod tests {
         let mut fs = reader();
         fs.groups = 2;
         put32(&mut fs.data, 2048 + 32 + 8, 4);
-        fs.data[4096..4098].copy_from_slice(&0x8000u16.to_le_bytes());
-        assert_eq!(fs.inode(9).unwrap().mode, 0x8000);
+        fs.data[4096..4098].copy_from_slice(&S_IFREG.to_le_bytes());
+        assert_eq!(fs.inode(9).unwrap().mode, S_IFREG);
         fs.desc_size = 64;
         put32(&mut fs.data, 2048 + 64 + 8, 4);
-        assert_eq!(fs.inode(9).unwrap().mode, 0x8000);
+        assert_eq!(fs.inode(9).unwrap().mode, S_IFREG);
     }
 }
