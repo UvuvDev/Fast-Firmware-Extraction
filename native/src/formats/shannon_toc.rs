@@ -1,15 +1,22 @@
-//! Samsung Shannon modem TOC. Port of formats/shannon_toc.py, whose layout
-//! and BOOT trimming were checked against grant-h/ShannonBaseband's MIT
-//! parse_modem.py/TOCSectionHeader.java and a real Pixel modem image.
-//! Zero-offset virtual regions are skipped. BOOT exposes its declared size
-//! minus the reference extractor's 528-byte trailer allowance. Load addresses,
-//! IDs and unknown metadata do not participate in file-offset calculation.
+//! Samsung Shannon modem TOC. Layout and BOOT trimming were checked against
+//! grant-h/ShannonBaseband's MIT parse_modem.py/TOCSectionHeader.java and a
+//! real Pixel modem image. Zero-offset virtual regions are skipped. BOOT
+//! exposes its declared size minus the reference extractor's 528-byte
+//! trailer allowance. Load addresses, IDs and unknown metadata do not
+//! participate in file-offset calculation. The full stored BOOT region,
+//! including its trailer, is validated against file bounds before
+//! trimming — not just the exposed, post-trim payload.
 use crate::archive::{ArchiveReader, MAX_MEMBERS, Member, RangeArchive, Result};
 use crate::bytes::{get, le32};
 use crate::registry::{FormatDescriptor, Signature};
 
+// Record layout: a 12-byte name, then four more little-endian u32 fields —
+// offset @12, load address @16 (unused), size @20, unk1 @24, id @28 (unused).
 const RECORD_SIZE: usize = 32;
-const BOOT_TRIM: usize = 528;
+const NAME_SIZE: usize = 12; // "name" field: bytes [0..NAME_SIZE)
+const OFFSET: usize = 12; // "offset" field
+const SIZE: usize = 20; // "size" field (load_address at 16 sits in between)
+const BOOT_TRIM: usize = 512 + 4 * 4;
 pub const FORMAT: FormatDescriptor = FormatDescriptor {
     id: "shannon_toc",
     name: "ShannonTOC",
@@ -21,14 +28,15 @@ pub const FORMAT: FormatDescriptor = FormatDescriptor {
     max_file_size: None,
 };
 fn name(entry: &[u8]) -> String {
-    String::from_utf8_lossy(entry[..12].split(|&byte| byte == 0).next().unwrap()).into_owned()
+    String::from_utf8_lossy(entry[..NAME_SIZE].split(|&byte| byte == 0).next().unwrap())
+        .into_owned()
 }
 fn open(data: Vec<u8>) -> Result<Box<dyn ArchiveReader>> {
     let header = get(&data, 0, RECORD_SIZE)?;
     if name(header) != "TOC" {
         return Err("missing leading Shannon TOC entry".into());
     }
-    let table_size = le32(header, 20)? as usize;
+    let table_size = le32(header, SIZE)? as usize;
     if table_size < RECORD_SIZE || table_size / RECORD_SIZE - 1 > MAX_MEMBERS {
         return Err("invalid Shannon TOC size or entry count".into());
     }
@@ -42,11 +50,11 @@ fn open(data: Vec<u8>) -> Result<Box<dyn ArchiveReader>> {
             terminated = true;
             break;
         }
-        let start = le32(record, 12)? as usize;
+        let start = le32(record, OFFSET)? as usize;
         if start == 0 {
             continue;
         }
-        let stored_size = le32(record, 20)? as usize;
+        let stored_size = le32(record, SIZE)? as usize;
         // Validate even the bytes omitted from BOOT's exposed payload.
         get(&data, start, stored_size)?;
         let size = if name == "BOOT" {
@@ -87,13 +95,25 @@ mod tests {
         }
     }
     #[test]
-    fn rejects_bad_magic_table_lengths_and_all_region_bounds() {
+    fn rejects_bad_magic() {
+        let mut data = SAMPLE.to_vec();
+        set32(&mut data, 0, 0);
+        assert!(Archive::open("shannon_toc", data).is_err());
+    }
+    #[test]
+    fn rejects_bad_table_size() {
+        for (offset, value) in [(20, 0), (20, 31), (20, 33), (20, u32::MAX)] {
+            let mut data = SAMPLE.to_vec();
+            set32(&mut data, offset, value);
+            assert!(
+                Archive::open("shannon_toc", data).is_err(),
+                "offset {offset}"
+            );
+        }
+    }
+    #[test]
+    fn rejects_out_of_bounds_member_regions() {
         for (offset, value) in [
-            (0, 0),
-            (20, 0),
-            (20, 31),
-            (20, 33),
-            (20, u32::MAX),
             (44, u32::MAX),
             (52, u32::MAX),
             (76, u32::MAX),
@@ -138,9 +158,12 @@ mod tests {
         }
     }
     #[test]
-    fn boot_trim_matches_reference_and_small_regions_are_empty() {
+    fn boot_trim_matches_reference_sample() {
         let archive = Archive::open_auto(SAMPLE.to_vec()).unwrap();
         assert_eq!(archive.read_named("BOOT").unwrap(), SAMPLE[128..200]);
+    }
+    #[test]
+    fn boot_region_smaller_than_trim_is_empty() {
         let mut data = SAMPLE.to_vec();
         set32(&mut data, 52, 100);
         assert!(
@@ -158,12 +181,15 @@ mod tests {
         assert!(Archive::open("shannon_toc", data).is_err());
     }
     #[test]
-    fn skips_unsafe_and_duplicate_names_rather_than_failing_outright() {
+    fn unsafe_path_like_name_is_skipped() {
         let mut data = SAMPLE.to_vec();
         data[32..44].fill(0);
         data[32..41].copy_from_slice(b"../escape");
         let archive = Archive::open("shannon_toc", data).unwrap();
         assert!(!archive.names().iter().any(|name| name == "../escape"));
+    }
+    #[test]
+    fn duplicate_name_is_deduplicated() {
         let mut data = SAMPLE.to_vec();
         data[64..76].fill(0);
         data[64..68].copy_from_slice(b"BOOT");
