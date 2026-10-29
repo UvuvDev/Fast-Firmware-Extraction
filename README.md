@@ -4,6 +4,8 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 
 ## Supported formats
 
+- **ShannonTOC** — Samsung Shannon Baseband TOC (Rust)
+
 Formats land one at a time, each as its own PR. Add a new unpacker with
 **one Rust module under `native/src/formats/` plus fixtures**. Build
 discovery, Python registration, and recursive CLI dispatch are automatic.
