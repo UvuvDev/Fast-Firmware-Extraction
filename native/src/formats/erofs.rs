@@ -2,16 +2,41 @@
 //! is AOSP erofs-utils (GPL-2.0+ OR MIT), under the MIT option. Supports compact
 //! and extended inodes, flat/inline data, single-device chunks and sparse data.
 //! Compressed inodes, metabox and global 48BIT addressing are unsupported.
+//!
+//! This Rust port validates directory entry name-offset bounds for every entry,
+//! not just the first, catching corruption that Python string slicing would silently
+//! truncate. It also rejects inline tail fragments that spill past their own metadata
+//! block, enforcing the format's invariant that tails stay within-block.
 use crate::archive::{ArchiveReader, LARGE_CONTAINER_MAX_SIZE, MAX_MEMBERS, Result, validate_name};
 use crate::bytes::{get, le32};
 use crate::registry::{FormatDescriptor, Signature};
 use std::collections::HashSet;
 
+const S_IFMT: u16 = 0xf000;
+const S_IFDIR: u16 = 0x4000;
+const S_IFREG: u16 = 0x8000;
+const DATALAYOUT_FLAT_PLAIN: u16 = 0;
+const DATALAYOUT_COMPRESSED_FULL: u16 = 1;
+const DATALAYOUT_FLAT_INLINE: u16 = 2;
+const DATALAYOUT_COMPRESSED_COMPACT: u16 = 3;
+const DATALAYOUT_CHUNK_BASED: u16 = 4;
+const CHUNK_FORMAT_BLKBITS_MASK: u16 = 0x1f;
+const CHUNK_FORMAT_INDEXES: u16 = 0x20;
+const CHUNK_FORMAT_48BIT: u16 = 0x40;
+const I_NLINK_1_BIT: u16 = 0x10;
+const FEATURE_INCOMPAT_METABOX: u32 = 0x100;
+const FEATURE_INCOMPAT_48BIT: u32 = 0x80;
+const EROFS_MAGIC: u32 = 0xe0f5e1e2;
+const EROFS_MAGIC_LE: [u8; 4] = EROFS_MAGIC.to_le_bytes();
+const KNOWN_CHUNK_FORMAT_BITS: u16 =
+    CHUNK_FORMAT_BLKBITS_MASK | CHUNK_FORMAT_INDEXES | CHUNK_FORMAT_48BIT;
+const UNSUPPORTED_INCOMPAT: u32 = FEATURE_INCOMPAT_METABOX | FEATURE_INCOMPAT_48BIT;
+
 pub const FORMAT: FormatDescriptor = FormatDescriptor {
     id: "erofs",
     name: "Erofs",
     description: "EROFS filesystem (uncompressed)",
-    signatures: &[Signature::new(1024, b"\xe2\xe1\xf5\xe0")],
+    signatures: &[Signature::new(1024, &EROFS_MAGIC_LE)],
     probe: None,
     open,
     max_input_size: Some(crate::archive::LARGE_CONTAINER_MAX_SIZE),
@@ -74,14 +99,16 @@ impl Erofs {
             return Err("EROFS inode exceeds file size limit".into());
         }
         let layout = (format >> 1) & 7;
-        if mode & 0xf000 == 0x8000 || mode & 0xf000 == 0x4000 {
+        if mode & S_IFMT == S_IFREG || mode & S_IFMT == S_IFDIR {
             match layout {
-                0 | 2 | 4 => {}
-                1 | 3 => return Err("compressed EROFS inodes unsupported".into()),
+                DATALAYOUT_FLAT_PLAIN | DATALAYOUT_FLAT_INLINE | DATALAYOUT_CHUNK_BASED => {}
+                DATALAYOUT_COMPRESSED_FULL | DATALAYOUT_COMPRESSED_COMPACT => {
+                    return Err("compressed EROFS inodes unsupported".into());
+                }
                 _ => return Err("reserved EROFS data layout".into()),
             }
         }
-        let high = if extended || (mode & 0xf000 != 0x4000 && format & 16 != 0) {
+        let high = if extended || (mode & S_IFMT != S_IFDIR && format & I_NLINK_1_BIT != 0) {
             u16le(raw, 6)? as u64
         } else {
             0
@@ -123,8 +150,8 @@ impl Erofs {
             Ok(())
         };
         match inode.layout {
-            0 | 2 => {
-                let inline = inode.layout == 2;
+            DATALAYOUT_FLAT_PLAIN | DATALAYOUT_FLAT_INLINE => {
+                let inline = inode.layout == DATALAYOUT_FLAT_INLINE;
                 if !inline && inode.block == u32::MAX as u64 {
                     return Ok(segments);
                 }
@@ -140,15 +167,15 @@ impl Erofs {
                     add(boundary, inode.tail, length)?;
                 }
             }
-            4 => {
+            DATALAYOUT_CHUNK_BASED => {
                 let format = inode.chunk_format;
-                if format & !0x7f != 0 {
+                if format & !KNOWN_CHUNK_FORMAT_BITS != 0 {
                     return Err("reserved EROFS chunk format".into());
                 }
-                let indexed = format & 0x20 != 0;
+                let indexed = format & CHUNK_FORMAT_INDEXES != 0;
                 let unit = if indexed { 8 } else { 4 };
                 let chunk = (self.bs as u64)
-                    .checked_shl((format & 31) as u32)
+                    .checked_shl((format & CHUNK_FORMAT_BLKBITS_MASK) as u32)
                     .ok_or("EROFS chunk size overflow")?;
                 let count = (inode.size as u64).div_ceil(chunk);
                 if count > MAX_MEMBERS as u64 {
@@ -169,7 +196,7 @@ impl Erofs {
                     } else {
                         le32(entry, 0)? as u64
                     };
-                    if format & 0x40 == 0 {
+                    if format & CHUNK_FORMAT_48BIT == 0 {
                         block &= u32::MAX as u64;
                     }
                     if block == u32::MAX as u64 {
@@ -244,8 +271,8 @@ impl Erofs {
                 return Err("EROFS traversal limit exceeded".into());
             }
             let inode = self.inode(nid)?;
-            match inode.mode & 0xf000 {
-                0x4000 => {
+            match inode.mode & S_IFMT {
+                S_IFDIR => {
                     if !visited.insert(nid) {
                         return Err("EROFS directory cycle or repeated directory".into());
                     }
@@ -262,7 +289,7 @@ impl Erofs {
                         pending.push((name, child, depth + 1));
                     }
                 }
-                0x8000 => {
+                S_IFREG => {
                     self.names.push(path);
                     self.files.push(inode);
                 }
@@ -286,14 +313,14 @@ impl ArchiveReader for Erofs {
 }
 fn open(data: Vec<u8>) -> Result<Box<dyn ArchiveReader>> {
     let sb = get(&data, 1024, 96)?;
-    if le32(sb, 0)? != 0xe0f5e1e2 {
+    if le32(sb, 0)? != EROFS_MAGIC {
         return Err("bad EROFS superblock magic".into());
     }
     let bits = sb[12];
     if !(9..=20).contains(&bits) {
         return Err("unsupported EROFS block size".into());
     }
-    if le32(sb, 80)? & 0x180 != 0 {
+    if le32(sb, 80)? & UNSUPPORTED_INCOMPAT != 0 {
         return Err("EROFS metabox/global 48BIT addressing unsupported".into());
     }
     let bs = 1usize << bits;
@@ -307,7 +334,7 @@ fn open(data: Vec<u8>) -> Result<Box<dyn ArchiveReader>> {
         names: vec![],
         files: vec![],
     };
-    if fs.inode(root)?.mode & 0xf000 != 0x4000 {
+    if fs.inode(root)?.mode & S_IFMT != S_IFDIR {
         return Err("EROFS root is not a directory".into());
     }
     fs.index()?;
@@ -370,7 +397,7 @@ mod tests {
         let mut reader = fs(sample());
         let pos = 1536 + 15 * 32;
         put16(&mut reader.data, pos, 1);
-        put16(&mut reader.data, pos + 4, 0x8000);
+        put16(&mut reader.data, pos + 4, S_IFREG);
         reader.data[pos + 8..pos + 16].copy_from_slice(&700u64.to_le_bytes());
         put32(&mut reader.data, pos + 16, 6);
         let node = reader.inode(15).unwrap();
@@ -378,25 +405,37 @@ mod tests {
         assert_eq!(reader.content(&node).unwrap(), reader.data[3072..3772]);
     }
     #[test]
-    fn rejects_directory_ranges_and_cycles() {
+    fn rejects_invalid_nameoff_on_first_entry() {
         let mut data = sample();
         put16(&mut data, 2560 + 8, 13);
         assert!(open(data).is_err());
+    }
+    #[test]
+    fn rejects_invalid_nameoff_on_non_first_entry() {
         let mut data = sample();
         put16(&mut data, 2560 + 20, 13);
         assert!(open(data).is_err());
+    }
+    #[test]
+    fn rejects_directory_cycle_via_zeroed_entry() {
         let mut data = sample();
         data[2560 + 24..2560 + 32].fill(0);
         assert!(open(data).is_err());
     }
     #[test]
-    fn rejects_unsupported_layouts_and_oversized_inodes() {
+    fn rejects_compressed_inode_layout() {
         let mut data = sample();
         put16(&mut data, 1568, 2);
         assert!(open(data).is_err());
+    }
+    #[test]
+    fn rejects_unsupported_incompat_feature() {
         let mut data = sample();
         put32(&mut data, 1104, 0x100);
         assert!(open(data).is_err());
+    }
+    #[test]
+    fn rejects_oversized_inode_size() {
         // A compact inode's 32-bit size field tops out under 4 GiB, which
         // the raised LARGE_CONTAINER_MAX_SIZE limit now accepts; exceeding
         // that limit needs an extended inode's 64-bit size field instead.
@@ -408,7 +447,7 @@ mod tests {
     #[test]
     fn zero_length_inline_and_tail_bounds() {
         let mut reader = fs(sample());
-        put16(&mut reader.data, 1568, 4);
+        put16(&mut reader.data, 1568, DATALAYOUT_FLAT_INLINE << 1);
         put32(&mut reader.data, 1576, 0);
         assert!(
             reader
