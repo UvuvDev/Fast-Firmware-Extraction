@@ -54,6 +54,15 @@ const MIN_HEADER_SIZE: usize = 128;
 const PARTITION_NAME_SIZE: usize = 36;
 const TARGET_LINEAR: u32 = 0;
 const TARGET_ZERO: u32 = 1;
+/// `TARGET_ZERO` extents synthesize bytes that never actually appear in the
+/// input (unlike `TARGET_LINEAR`, which is bounded by `data.len()` via
+/// `get(&data, ...)`), so a tiny crafted image could otherwise claim up to
+/// `LARGE_CONTAINER_MAX_SIZE` of zero-fill per partition with nothing to
+/// back it. Cap the total Zero-extent bytes synthesized across the whole
+/// image to a generous multiple of the actual input size -- comfortably
+/// above what legitimate sparse padding in a real super.img needs, but
+/// bounded relative to the bytes actually supplied.
+const ZERO_EXTENT_BUDGET_MULTIPLIER: usize = 4096;
 
 fn add(a: usize, b: usize) -> Result<usize> {
     a.checked_add(b).ok_or("super image offset overflow".into())
@@ -203,6 +212,8 @@ fn open(data: Vec<u8>) -> Result<Box<dyn ArchiveReader>> {
         return Err("super image extent entry too small".into());
     }
 
+    let zero_extent_budget = mul(data.len().max(1), ZERO_EXTENT_BUDGET_MULTIPLIER)?;
+    let mut total_zero_bytes = 0_usize;
     let mut names = Vec::new();
     let mut files = Vec::new();
     for entry in partitions_table.chunks_exact(metadata.partitions.entry_size) {
@@ -254,7 +265,15 @@ fn open(data: Vec<u8>) -> Result<Box<dyn ArchiveReader>> {
                     get(&data, start, length)?; // validated eagerly, read lazily
                     extents.push(Extent::Linear(start..end));
                 }
-                TARGET_ZERO => extents.push(Extent::Zero(length)),
+                TARGET_ZERO => {
+                    total_zero_bytes = add(total_zero_bytes, length)?;
+                    if total_zero_bytes > zero_extent_budget {
+                        return Err(
+                            "super image zero extents synthesize far more data than the input could plausibly back".into(),
+                        );
+                    }
+                    extents.push(Extent::Zero(length))
+                }
                 _ => return Err("unsupported super image extent target type".into()),
             }
         }
@@ -386,6 +405,48 @@ mod tests {
         // Recompute the primary slot's tables/header checksums, then
         // replicate the whole fixed-up slot into the backup slot too --
         // otherwise the parser would just fall back to the pristine backup.
+        let tables_checksum = Sha256::digest(&data[tables_start..tables_start + tables_size]);
+        data[primary + 48..primary + 80].copy_from_slice(&tables_checksum);
+        let mut header = data[primary..primary + header_size].to_vec();
+        header[12..44].fill(0);
+        let header_checksum = Sha256::digest(&header);
+        data[primary + 12..primary + 44].copy_from_slice(&header_checksum);
+        data.copy_within(primary..primary + metadata_max_size, backup);
+
+        assert!(Archive::open("android_super", data).is_err());
+    }
+
+    #[test]
+    fn rejects_a_zero_extent_wildly_disproportionate_to_the_input_size() {
+        use sha2::{Digest, Sha256};
+
+        // SUPER is 65536 bytes; turn its very first extent into a
+        // TARGET_ZERO extent claiming ~293 MiB of logical zero-fill, which
+        // is far beyond this tiny input's zero-extent budget but still well
+        // under the 16 GiB LARGE_CONTAINER_MAX_SIZE per-partition cap, so
+        // this specifically exercises the new input-size-relative check
+        // rather than the pre-existing absolute cap.
+        let mut data = SUPER.to_vec();
+        let primary = 4096 * 3;
+        let (metadata_max_size, slot_count) = super::geometry(&data, 4096).unwrap();
+        let backup = primary + slot_count * metadata_max_size;
+
+        let header_size =
+            u32::from_le_bytes(data[primary + 8..primary + 12].try_into().unwrap()) as usize;
+        let tables_size =
+            u32::from_le_bytes(data[primary + 44..primary + 48].try_into().unwrap()) as usize;
+        let extents_descriptor = primary + 92;
+        let extents_offset = u32::from_le_bytes(
+            data[extents_descriptor..extents_descriptor + 4].try_into().unwrap(),
+        ) as usize;
+        let tables_start = primary + header_size;
+        let extents_start = tables_start + extents_offset;
+
+        // num_sectors (bytes 0..8) and target_type (bytes 8..12) of the
+        // first extent entry.
+        data[extents_start..extents_start + 8].copy_from_slice(&600_000_u64.to_le_bytes());
+        data[extents_start + 8..extents_start + 12].copy_from_slice(&1_u32.to_le_bytes()); // TARGET_ZERO
+
         let tables_checksum = Sha256::digest(&data[tables_start..tables_start + tables_size]);
         data[primary + 48..primary + 80].copy_from_slice(&tables_checksum);
         let mut header = data[primary..primary + header_size].to_vec();
