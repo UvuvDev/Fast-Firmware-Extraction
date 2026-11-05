@@ -63,6 +63,9 @@ fn members(data: &[u8]) -> Result<Vec<Member>> {
         }
         let header_end = add(offset, HEADER_SIZE)?;
         let name_field = get(data, header_end, namesize)?;
+        if name_field[namesize - 1] != 0 {
+            return Err("cpio filename missing NUL terminator".into());
+        }
         let name = std::str::from_utf8(&name_field[..namesize - 1])
             .map_err(|_| "non-UTF8 cpio filename")?;
         let data_start = align4(add(header_end, namesize)?)?;
@@ -133,6 +136,21 @@ mod tests {
         let position = CPIO.windows(6).rposition(|w| w == b"070701").unwrap();
         let mut data = CPIO.to_vec();
         data[position] = b'X';
+        assert!(Archive::open("cpio_newc", data).is_err());
+    }
+
+    #[test]
+    fn rejects_a_name_field_missing_its_nul_terminator() {
+        // The first entry's name field (right after the 110-byte header)
+        // must end in a NUL byte; corrupting that byte should error rather
+        // than silently truncating the real last filename character.
+        let namesize =
+            u32::from_str_radix(std::str::from_utf8(&CPIO[94..102]).unwrap(), 16).unwrap()
+                as usize;
+        let last_byte = 110 + namesize - 1;
+        let mut data = CPIO.to_vec();
+        assert_eq!(data[last_byte], 0, "fixture's first entry name should be NUL-terminated");
+        data[last_byte] = b'X';
         assert!(Archive::open("cpio_newc", data).is_err());
     }
 }
