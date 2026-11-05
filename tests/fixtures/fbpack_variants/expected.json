@@ -1,0 +1,34 @@
+{
+  "native_format": "fbpack",
+  "sample": "sample.bin",
+  "children": {
+    "ufs": {
+      "length": 16,
+      "sha256": "fad560fc3a029616ce07949a66a59281b02be5f60a20d2529494bac19011af92"
+    },
+    "ufs~1": {
+      "length": 17,
+      "sha256": "ccc2c611137e0aa9c83a531c835ebff4c8203a59db7ce276dd7242898eee4526"
+    },
+    "ufs~1~1": {
+      "length": 21,
+      "sha256": "2772fb3504e92bc36b9b123a7beef44f09150e3808cd5aa80e4b4d7c8b36ad2d"
+    },
+    "partition%3A1": {
+      "length": 23,
+      "sha256": "169cb5e3dc084d4d2d867c85c98d18ad54ca2f28c69196b7df95ce6f8ff895e4"
+    },
+    "partition%3A1~1": {
+      "length": 21,
+      "sha256": "748f950fe8acb5cc5de74073dc8abb3c97b1020bffe9614d0de7d3b5bbbde216"
+    },
+    "partition%3A1~2": {
+      "length": 22,
+      "sha256": "5f687b381b802d91335a164da33a0dcc309467f6a692df375bdaa2571b06a4ac"
+    },
+    "abl": {
+      "length": 22973,
+      "sha256": "d8530eae34c574a7be1910e378a7d2adc5ab2f21d7b9b7ecac66290e3311e7c7"
+    }
+  }
+}
