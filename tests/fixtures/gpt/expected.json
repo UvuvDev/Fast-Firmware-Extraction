@@ -1,0 +1,19 @@
+{
+  "sample": "sample.img",
+  "children": {
+    "boot_a": {
+      "length": 4096,
+      "sha256": "ad7facb2586fc6e966c004d7d1d16b024f5805ff7cb47c7a85dabd8b48892ca7"
+    },
+    "system_a": {
+      "length": 8192,
+      "sha256": "9f1dcbc35c350d6027f98be0f5c8b43b42ca52b7604459c0c42be3aa88913d47"
+    },
+    "part3": {
+      "length": 1536,
+      "sha256": "80422bc3d307b4a25bdafcc84ac7fb01cb55a09810e8b0f37bb12e0edb5c48ca"
+    }
+  },
+  "native_format": "gpt",
+  "transform": "Gpt"
+}

@@ -4,6 +4,8 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 
 ## Supported formats
 
+- **Gpt** — GUID Partition Table (512-byte sectors, Rust)
+
 Formats land one at a time, each as its own PR. Add a new unpacker with
 **one Rust module under `native/src/formats/` plus fixtures**. Build
 discovery, Python registration, and recursive CLI dispatch are automatic.
@@ -84,3 +86,14 @@ BN_DISABLE_USER_PLUGINS=1 ./scripts/run_tests.sh -v --confcutdir=tests
 
 This isolates unrelated user plugins and keeps pytest from importing the
 hyphenated checkout directory as a Python package.
+
+GPT currently uses 512-byte logical sectors and checks both header and
+partition-array CRC32s. Extended header/entry sizes and UTF-16LE partition
+names are supported; backup-table recovery and 4 KiB sectors are not yet
+implemented. Sets `max_input_size`/`max_file_size` to 16 GiB.
+A "hybrid" ISO 9660 image (virtually every modern Linux live/install ISO,
+built to also be dd'able to a USB stick) carries a real GPT/MBR signature
+*and* a real ISO 9660 Primary Volume Descriptor at once, confirmed against a
+real Fedora Workstation Live ISO; GPT's own probe defers to Iso9660 when both
+are present, since GPT's longer signature would otherwise always win
+detection and the actual filesystem contents would never be reached.

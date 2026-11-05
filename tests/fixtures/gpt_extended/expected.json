@@ -1,0 +1,11 @@
+{
+  "sample": "sample.img",
+  "native_format": "gpt",
+  "transform": "Gpt",
+  "children": {
+    "modem_\u6570\u636e\ud83d\ude00": {
+      "length": 1024,
+      "sha256": "fb69760479c60ef31b34defc0a863eb792ff8aff9717bd47cd677eda830e089d"
+    }
+  }
+}
