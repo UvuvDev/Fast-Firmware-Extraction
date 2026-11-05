@@ -102,21 +102,30 @@ fn open(data: Vec<u8>) -> Result<Box<dyn ArchiveReader>> {
 
 #[cfg(test)]
 mod tests {
+    use super::FORMAT;
     use crate::archive::Archive;
-    use crate::registry;
     const SAMPLE: &[u8] = include_bytes!("../../../tests/fixtures/gpt/sample.img");
 
     #[test]
-    fn defers_detection_to_iso9660_on_a_hybrid_image() {
+    fn declines_its_own_probe_on_a_hybrid_iso9660_image() {
         // A real "hybrid" ISO (every modern Linux live/install image) has a
         // genuine GPT/MBR signature at 510 *and* a genuine ISO 9660 PVD at
         // sector 16 -- confirmed against a real Fedora Workstation Live
         // ISO. GPT's longer signature must not win over iso9660's shorter
-        // one here, or the actual filesystem is never reached.
+        // one here, or the actual filesystem is never reached. This test
+        // exercises gpt's own probe function directly (rather than the
+        // shared registry) so it doesn't depend on iso9660 also being
+        // compiled in -- each format branch is built and tested in
+        // isolation, and registry::detect would panic here with iso9660
+        // absent.
         let mut data = vec![0_u8; 16 * 2048 + 7];
         data[510..520].copy_from_slice(b"\x55\xaaEFI PART");
         data[16 * 2048..16 * 2048 + 7].copy_from_slice(b"\x01CD001\x01");
-        assert_eq!(registry::detect(&data).unwrap().id, "iso9660");
+        let probe = FORMAT.probe.expect("gpt declares a probe");
+        assert!(
+            !probe(&data),
+            "gpt's probe should decline to match a hybrid ISO 9660 image"
+        );
     }
     fn set32(data: &mut [u8], offset: usize, value: u32) {
         data[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
