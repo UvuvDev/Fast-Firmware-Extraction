@@ -1,0 +1,10 @@
+{
+  "sample": "sample.bin",
+  "children": {
+    "kernel.bin": {
+      "length": 256,
+      "sha256": "c1e56560a80b6ea9284e511d76ac5b6ae9988ee48a6c95689f4044d94ad94bfc"
+    }
+  },
+  "native_format": "lzma_alone"
+}
