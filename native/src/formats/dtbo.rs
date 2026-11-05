@@ -17,6 +17,7 @@ pub enum Error {
     TruncatedHeader,
     InvalidMagic,
     UnsupportedLayout,
+    TooManyEntries,
     TruncatedTable,
     PayloadOutOfBounds,
 }
@@ -27,6 +28,7 @@ impl fmt::Display for Error {
             Self::TruncatedHeader => "truncated DT table header",
             Self::InvalidMagic => "unexpected DT table magic",
             Self::UnsupportedLayout => "unexpected DT table header/entry size",
+            Self::TooManyEntries => "DT entry table declares too many entries",
             Self::TruncatedTable => "DT entry table exceeds input length",
             Self::PayloadOutOfBounds => "DT payload exceeds input length",
         })
@@ -67,6 +69,9 @@ impl<'a> Dtbo<'a> {
         }
 
         let count = word(header, 16) as usize;
+        if count > crate::archive::MAX_MEMBERS {
+            return Err(Error::TooManyEntries);
+        }
         let table_start = word(header, 20) as usize;
         let table_end = count
             .checked_mul(ENTRY_SIZE)

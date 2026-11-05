@@ -1,4 +1,4 @@
-use firmware_unpack::dtbo::{Dtbo, Error};
+use firmware_unpack::formats::dtbo::{Dtbo, Error};
 
 const SAMPLE: &[u8] = include_bytes!("../../tests/fixtures/dtbo/sample.img");
 const CORRUPT: &[u8] = include_bytes!("../../tests/fixtures/dtbo_corrupt/sample.img");
@@ -153,11 +153,30 @@ fn rejects_nonstandard_record_sizes() {
 }
 
 #[test]
+fn rejects_a_count_above_max_members_before_deriving_table_end() {
+    // A crafted image with table_start near 0 and a huge declared count is
+    // trivially satisfiable with offset=0/size=0 entries; count must be
+    // bounded before it's used to size the entry table or collect members.
+    let mut data = SAMPLE.to_vec();
+    set_word(&mut data, 16, 33_500_000);
+    assert_eq!(Dtbo::parse(&data).unwrap_err(), Error::TooManyEntries);
+}
+
+#[test]
 fn rejects_table_ranges_before_iterating_or_allocating() {
-    for (offset, value) in [(16, u32::MAX), (20, u32::MAX), (20, 153)] {
+    // Setting `count` (offset 16) to u32::MAX is now caught earlier by the
+    // MAX_MEMBERS bound (see rejects_a_count_above_max_members_before_deriving_table_end),
+    // so it surfaces as TooManyEntries rather than TruncatedTable; the
+    // other two cases (a huge or merely out-of-range table_start) still
+    // reach the table-range check.
+    for (offset, value, expected) in [
+        (16, u32::MAX, Error::TooManyEntries),
+        (20, u32::MAX, Error::TruncatedTable),
+        (20, 153, Error::TruncatedTable),
+    ] {
         let mut data = SAMPLE.to_vec();
         set_word(&mut data, offset, value);
-        assert_eq!(Dtbo::parse(&data).unwrap_err(), Error::TruncatedTable);
+        assert_eq!(Dtbo::parse(&data).unwrap_err(), expected);
     }
 }
 
