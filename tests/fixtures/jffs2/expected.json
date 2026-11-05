@@ -1,0 +1,22 @@
+{
+  "sample": "sample.img",
+  "native_format": "jffs2",
+  "children": {
+    "small.txt": {
+      "length": 114,
+      "sha256": "06da52d22993d6802e9579f09ae4317272fc21290dea16be651c66586cadd794"
+    },
+    "subdir/nested.txt": {
+      "length": 93,
+      "sha256": "c22f78ee3427b424b2b40765790dcddd233cf0e0ea85ee0e8cbf2ed94ab34dd5"
+    },
+    "big.bin": {
+      "length": 9000,
+      "sha256": "57df96a2cdbdad7cea70caf1b05f20ea5b4957a16a2cf17d304d432afb39af8a"
+    },
+    "empty.bin": {
+      "length": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  }
+}
