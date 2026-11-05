@@ -4,6 +4,8 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 
 ## Supported formats
 
+- **Blfs** — standalone/embedded BLFS v1 bootloader resource archives (Rust)
+
 Formats land one at a time, each as its own PR. Add a new unpacker with
 **one Rust module under `native/src/formats/` plus fixtures**. Build
 discovery, Python registration, and recursive CLI dispatch are automatic.
@@ -84,3 +86,8 @@ BN_DISABLE_USER_PLUGINS=1 ./scripts/run_tests.sh -v --confcutdir=tests
 
 This isolates unrelated user plugins and keeps pytest from importing the
 hyphenated checkout directory as a Python package.
+
+BLFS detects a standalone table or one embedded within the first 4 MiB of an
+executable. It preserves member names and stored bytes; LZ4 members recursively
+decode through the normal registry. The v1 layout is verified against the real
+Cubs spacecraft ABL image and independent extraction of all 28 resource files.
