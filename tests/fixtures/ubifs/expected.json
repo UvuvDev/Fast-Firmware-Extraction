@@ -1,0 +1,18 @@
+{
+  "sample": "sample.ubifs",
+  "children": {
+    "hello.txt": {
+      "length": 35,
+      "sha256": "c3de75e5daeaa944324c358b91efba6a4e3961ac31f3a5569732ca5075138a2c"
+    },
+    "subdir/nested.txt": {
+      "length": 19,
+      "sha256": "d80b83aa2c20bf29913e3c3abb1aea8057cad83d70b5985816e844209410275c"
+    },
+    "compressed.txt": {
+      "length": 570,
+      "sha256": "a24bdf2b70460336c1aaad604ee7740147c0b5f58a86f040473a7de22c8598aa"
+    }
+  },
+  "native_format": "ubifs"
+}

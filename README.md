@@ -4,6 +4,8 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 
 ## Supported formats
 
+- **Ubifs** — UBIFS committed filesystem, none/raw DEFLATE (Rust)
+
 Formats land one at a time, each as its own PR. Add a new unpacker with
 **one Rust module under `native/src/formats/` plus fixtures**. Build
 discovery, Python registration, and recursive CLI dispatch are automatic.
@@ -84,3 +86,9 @@ BN_DISABLE_USER_PLUGINS=1 ./scripts/run_tests.sh -v --confcutdir=tests
 
 This isolates unrelated user plugins and keeps pytest from importing the
 hyphenated checkout directory as a Python package.
+
+UBIFS checks node CRCs and reconstructs the committed index with uncompressed
+or raw DEFLATE data. Dirty/diverging masters, journal replay, authentication,
+LZO and ZSTD are unsupported. DEFLATE uses pure Rust `miniz_oxide`; each data
+node expands to at most 4 KiB. UBI volumes chain into UBIFS automatically.
+Sets `max_input_size`/`max_file_size` to 16 GiB.
