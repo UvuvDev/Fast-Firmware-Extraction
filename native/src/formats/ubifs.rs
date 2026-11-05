@@ -117,7 +117,15 @@ impl Ubifs {
             0 => {
                 get(bytes, 0, 160)?;
                 let size = u64le(bytes, 48)?;
-                if size > LARGE_CONTAINER_MAX_SIZE as u64 {
+                // A declared size is bounded by the crate-wide ceiling, but
+                // that alone lets a KB-sized image claim a near-16 GiB inode
+                // and force a matching eager allocation in `read` -- a
+                // multi-billion-to-one amplification. Also bound it by a
+                // generous multiple of the actual input length (legitimate
+                // per-block compression stays far under this given the
+                // 4 KiB-per-block cap below).
+                let max_plausible_size = self.data.len() as u64 * 64;
+                if size > LARGE_CONTAINER_MAX_SIZE as u64 || size > max_plausible_size {
                     return Err("UBIFS inode exceeds file size limit".into());
                 }
                 let record = Inode {
@@ -298,7 +306,11 @@ impl ArchiveReader for Ubifs {
             .files
             .get(index)
             .ok_or("UBIFS file index out of range")?;
-        let size = self.inodes[ino].size;
+        let size = self
+            .inodes
+            .get(ino)
+            .ok_or("UBIFS file references missing inode")?
+            .size;
         let mut output = vec![0; size];
         for (block, record) in self.blocks.get(ino).into_iter().flatten() {
             let start = *block as u64 * 4096;
@@ -445,6 +457,20 @@ mod tests {
         // u32::MAX) stays under the raised LARGE_CONTAINER_MAX_SIZE limit.
         let mut data = sample();
         data[16752 + 48..16752 + 56].copy_from_slice(&(20_u64 * 1024 * 1024 * 1024).to_le_bytes());
+        fix(&mut data, 16752);
+        assert!(open(data).is_err());
+    }
+    #[test]
+    fn rejects_inode_size_grossly_disproportionate_to_input_length() {
+        // Well under the crate-wide 16 GiB ceiling (so that check alone
+        // would accept it), but far past 64x this ~20 KiB fixture's actual
+        // length -- the same KB-image-claims-a-huge-inode amplification the
+        // 16 GiB check misses, just scaled down so the fixture stays small.
+        // Before the fix this would make `read()` eagerly allocate ~100 MB
+        // for a few KB of input instead of being rejected at parse time.
+        let mut data = sample();
+        assert!((data.len() as u64) * 64 < 100_000_000);
+        data[16752 + 48..16752 + 56].copy_from_slice(&100_000_000_u64.to_le_bytes());
         fix(&mut data, 16752);
         assert!(open(data).is_err());
     }
