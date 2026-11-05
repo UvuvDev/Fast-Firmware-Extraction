@@ -1,0 +1,10 @@
+{
+  "sample": "sample.bin",
+  "children": {
+    "firmware.trx": {
+      "length": 4166,
+      "sha256": "9ed2b217722545f99ce07b1ad4734ac96d84d99a948c1203878d2d15795bbdb4"
+    }
+  },
+  "native_format": "netgear_chk"
+}
