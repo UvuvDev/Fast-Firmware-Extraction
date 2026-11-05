@@ -4,6 +4,8 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 
 ## Supported formats
 
+- **Ubi** — UBI flash image (Rust)
+
 Formats land one at a time, each as its own PR. Add a new unpacker with
 **one Rust module under `native/src/formats/` plus fixtures**. Build
 discovery, Python registration, and recursive CLI dispatch are automatic.
@@ -84,3 +86,7 @@ BN_DISABLE_USER_PLUGINS=1 ./scripts/run_tests.sh -v --confcutdir=tests
 
 This isolates unrelated user plugins and keeps pytest from importing the
 hyphenated checkout directory as a Python package.
+
+UBI reorders logical eraseblocks and extracts named static/dynamic volumes.
+It uses the first layout-table copy and rejects missing/duplicate data LEBs;
+update recovery and UBI header/data CRC verification are not implemented.
