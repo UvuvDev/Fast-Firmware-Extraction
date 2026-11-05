@@ -30,8 +30,11 @@ pub const FORMAT: FormatDescriptor = FormatDescriptor {
     signatures: &[Signature::new(0, b"\x45\x3d\xcd\x28")],
     probe: None,
     open,
-    max_input_size: Some(crate::archive::LARGE_CONTAINER_MAX_SIZE),
-    max_file_size: Some(crate::archive::LARGE_CONTAINER_MAX_SIZE),
+    // CramFS's own 24-bit inode size field structurally caps any single
+    // file at ~16 MiB (see the mask in `parse_inode`), well under the
+    // crate-wide defaults, so there's no reason to widen them here.
+    max_input_size: None,
+    max_file_size: None,
 };
 
 const BLOCK_SIZE: usize = 4096;
