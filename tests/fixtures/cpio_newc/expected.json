@@ -1,0 +1,18 @@
+{
+  "sample": "sample.cpio",
+  "native_format": "cpio_newc",
+  "children": {
+    "file1.txt": {
+      "length": 264,
+      "sha256": "87c224b3d553e765acaa94bccc088fb45e32a5dc87711fd9682157993d26f12a"
+    },
+    "subdir/nested.bin": {
+      "length": 203,
+      "sha256": "183ef956d566a0c90e95d258683751ae1c9162513b0103be2e877b02ef2f8d3a"
+    },
+    "empty.bin": {
+      "length": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  }
+}

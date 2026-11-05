@@ -4,6 +4,8 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 
 ## Supported formats
 
+- **CpioNewc** — CPIO "newc" (070701) archives, e.g. Linux initramfs (Rust)
+
 Formats land one at a time, each as its own PR. Add a new unpacker with
 **one Rust module under `native/src/formats/` plus fixtures**. Build
 discovery, Python registration, and recursive CLI dispatch are automatic.
@@ -84,3 +86,10 @@ BN_DISABLE_USER_PLUGINS=1 ./scripts/run_tests.sh -v --confcutdir=tests
 
 This isolates unrelated user plugins and keeps pytest from importing the
 hyphenated checkout directory as a Python package.
+
+CpioNewc exposes every regular file in a "070701" stream as a byte range;
+cpio never compresses entries, so no decoder is needed. A leading "./" (from
+a `find .`-style archive) is stripped from member names. Directories,
+symlinks, device nodes, and hardlink bookkeeping are not represented as
+members, and the "070702" CRC variant is unsupported. See
+[CPIO fixture provenance](tests/fixture_sources/cpio_newc/README.md).
