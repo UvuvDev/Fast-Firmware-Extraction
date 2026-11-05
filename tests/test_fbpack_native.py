@@ -3,10 +3,18 @@ from pathlib import Path
 import hashlib
 import json
 import os
-from binaryninja import TransformResult, TransformSession, TransformSessionMode
+from binaryninja import Transform, TransformResult, TransformSession, TransformSessionMode
 import pytest
 from easy_firmware_opening.common.native import open_archive
 from easy_firmware_opening.formats import fbpack
+
+
+def _transform_registered(name: str) -> bool:
+    try:
+        Transform[name]
+    except KeyError:
+        return False
+    return True
 
 
 @pytest.mark.parametrize("version", [1, 2])
@@ -23,6 +31,8 @@ def test_fbpack_native_matches_python(version):
 
 
 def test_fbpack_variant_selection_in_interactive_browser():
+    if not (_transform_registered("Apbl") and _transform_registered("Blfs")):
+        pytest.skip("build the apbl and blfs formats into the Rust backend")
     fixture = Path(__file__).parent / "fixtures/fbpack_variants"
     expected = json.loads((fixture / "expected.json").read_text())["children"]
     session = TransformSession(str(fixture / "sample.bin"),
