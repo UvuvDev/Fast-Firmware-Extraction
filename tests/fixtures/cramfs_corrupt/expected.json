@@ -1,0 +1,5 @@
+{
+  "sample": "sample.img",
+  "native_format": "cramfs",
+  "expect_failure": true
+}
