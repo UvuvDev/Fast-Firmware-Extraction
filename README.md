@@ -4,6 +4,8 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 
 ## Supported formats
 
+- **AndroidSuperImage** — Android super partition / dynamic partitions (liblp, Rust)
+
 Formats land one at a time, each as its own PR. Add a new unpacker with
 **one Rust module under `native/src/formats/` plus fixtures**. Build
 discovery, Python registration, and recursive CLI dispatch are automatic.
@@ -84,3 +86,18 @@ BN_DISABLE_USER_PLUGINS=1 ./scripts/run_tests.sh -v --confcutdir=tests
 
 This isolates unrelated user plugins and keeps pytest from importing the
 hyphenated checkout directory as a Python package.
+
+AndroidSuperImage reads liblp's geometry block and metadata slot 0 (falling
+back from the primary copy to its backup if the primary's SHA-256 checksum
+doesn't validate), then assembles each named partition from its LINEAR
+(byte range on a backing block device) and ZERO (hole) extents, across any
+number of block devices. "Retrofit" devices, whose dynamic partitions are
+split across separate physical super_a/super_b images with no single
+combined file, are supported by feeding this format the **concatenation**
+of every device's own backing file, metadata-holding device first (e.g.
+`cat super_super_a.img super_super_b.img > combined.img`) -- a real
+partition's extents can reference more than one device this way. Other
+metadata slots' redundant copies and partition group quotas are not
+inspected. Sets `max_input_size`/`max_file_size` to 16 GiB: a disk/partition
+image routinely exceeds the default 1 GiB bound. See
+[Android super.img fixture provenance](tests/fixture_sources/android_super/README.md).

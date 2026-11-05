@@ -1,0 +1,5 @@
+{
+  "sample": "sample.img",
+  "native_format": "android_super",
+  "expect_failure": true
+}
