@@ -51,6 +51,9 @@ fn open(data: Vec<u8>) -> Result<Box<dyn ArchiveReader>> {
                 && be32(&data, offset + 20).ok() == Some(start as u32)
         })
         .ok_or("could not measure UBI eraseblock size")?;
+    if peb < 4096 {
+        return Err("UBI eraseblock size implausibly small".into());
+    }
     if vid < 64 || vid.checked_add(64).is_none_or(|end| end > start) || start >= peb {
         return Err("invalid UBI EC/VID/data offsets".into());
     }
@@ -141,16 +144,17 @@ mod tests {
         data.pop();
         assert!(open(data).is_err());
         let mut data = sample();
-        data[512 + 64 + 20..512 + 64 + 24].copy_from_slice(&400u32.to_be_bytes());
+        // Capacity is PEB(4096) - start(128) - pad(0) = 3968; claim more.
+        data[4096 + 64 + 20..4096 + 64 + 24].copy_from_slice(&4000u32.to_be_bytes());
         assert!(open(data).is_err());
     }
     #[test]
     fn rejects_gaps_and_duplicate_lebs_but_skips_unsafe_names() {
         let mut data = sample();
-        data[512 + 64 + 12..512 + 64 + 16].copy_from_slice(&1u32.to_be_bytes());
+        data[4096 + 64 + 12..4096 + 64 + 16].copy_from_slice(&1u32.to_be_bytes());
         assert!(open(data).is_err());
         let mut data = sample();
-        data.extend_from_within(512..1024);
+        data.extend_from_within(4096..8192);
         assert!(open(data).is_err());
         let mut data = sample();
         data[144..148].copy_from_slice(b"../x");
@@ -160,22 +164,42 @@ mod tests {
     #[test]
     fn reorders_static_lebs_and_reads_dynamic_padding() {
         let mut data = sample();
-        data.extend_from_within(512..1024);
-        data[512 + 64 + 12..512 + 64 + 16].copy_from_slice(&1u32.to_be_bytes());
-        data[1024 + 128..1024 + 128 + 108].fill(42);
+        data.extend_from_within(4096..8192);
+        data[4096 + 64 + 12..4096 + 64 + 16].copy_from_slice(&1u32.to_be_bytes());
+        data[8192 + 128..8192 + 128 + 108].fill(42);
         let archive = open(data).unwrap();
         let output = archive.read(0).unwrap();
         assert_eq!(output.len(), 216);
         assert_eq!(&output[..108], &[42; 108]);
         let mut data = sample();
-        data[512 + 64 + 5] = 1;
-        data[512 + 64 + 28..512 + 64 + 32].copy_from_slice(&16u32.to_be_bytes());
-        assert_eq!(open(data).unwrap().read(0).unwrap().len(), 368);
+        data[4096 + 64 + 5] = 1;
+        data[4096 + 64 + 28..4096 + 64 + 32].copy_from_slice(&16u32.to_be_bytes());
+        // Dynamic capacity now: PEB(4096) - start(128) - pad(16) = 3952.
+        assert_eq!(open(data).unwrap().read(0).unwrap().len(), 3952);
     }
     #[test]
     fn measures_geometry_despite_magic_in_first_payload() {
         let mut data = sample();
         data[320..324].copy_from_slice(b"UBI#");
         assert_eq!(open(data).unwrap().read(0).unwrap().len(), 108);
+    }
+    #[test]
+    fn rejects_an_implausibly_small_inferred_eraseblock_size() {
+        // Two repeated 64-byte "eraseblocks" sharing the same magic/vid/start
+        // fields: geometry inference would otherwise happily settle on a
+        // 64-byte PEB, far below any real NAND/NOR geometry, letting a
+        // crafted multi-GiB input (this format allows up to 16 GiB) force a
+        // ~10^8-iteration scan. Both occurrences must be rejected before the
+        // per-eraseblock scan loop ever runs.
+        let mut data = vec![0u8; 128];
+        for base in [0usize, 64] {
+            data[base..base + 4].copy_from_slice(b"UBI#");
+            data[base + 16..base + 20].copy_from_slice(&64u32.to_be_bytes());
+            data[base + 20..base + 24].copy_from_slice(&65u32.to_be_bytes());
+        }
+        match open(data) {
+            Err(err) => assert!(err.contains("implausibly small"), "unexpected error: {err}"),
+            Ok(_) => panic!("expected an implausibly-small-eraseblock rejection"),
+        }
     }
 }
