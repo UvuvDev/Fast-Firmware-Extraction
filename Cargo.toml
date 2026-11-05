@@ -25,6 +25,10 @@ crate-type = ["rlib", "cdylib"]
 name = "fixtures"
 path = "native/tests/fixtures.rs"
 
+[[test]]
+name = "dtbo"
+path = "native/tests/dtbo.rs"
+
 [[bin]]
 name = "firmware-unpack"
 path = "native/src/main.rs"
