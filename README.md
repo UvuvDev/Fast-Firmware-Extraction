@@ -4,6 +4,8 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 
 ## Supported formats
 
+- **UnisocMECP** — Unisoc CP memory-decoupling modem image (Rust)
+
 Formats land one at a time, each as its own PR. Add a new unpacker with
 **one Rust module under `native/src/formats/` plus fixtures**. Build
 discovery, Python registration, and recursive CLI dispatch are automatic.
@@ -84,3 +86,9 @@ BN_DISABLE_USER_PLUGINS=1 ./scripts/run_tests.sh -v --confcutdir=tests
 
 This isolates unrelated user plugins and keeps pytest from importing the
 hyphenated checkout directory as a Python package.
+
+MECP extracts the embedded modem, CP bootstrap, and optional AVB vbmeta.
+Sibling memory regions are reported in the memory map rather than emitted as
+files. The adjusted modem load address is logged by Binary Ninja and printed
+by the CLI. Recognized AVB footers with invalid lengths/ranges are rejected;
+cryptographic signatures are not verified.

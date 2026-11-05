@@ -1,0 +1,6 @@
+{
+  "sample": "sample.img",
+  "native_format": "mecp",
+  "transform": "UnisocMECP",
+  "expect_failure": true
+}
