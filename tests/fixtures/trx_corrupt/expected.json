@@ -1,0 +1,6 @@
+{
+  "sample": "sample.bin",
+  "transform": "Trx",
+  "expect_failure": true,
+  "native_format": "trx"
+}
