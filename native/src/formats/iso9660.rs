@@ -105,6 +105,7 @@ fn rock_ridge_name(system_use: &[u8]) -> Option<String> {
     found.then(|| String::from_utf8_lossy(&name).into_owned())
 }
 
+#[derive(Debug)]
 struct Entry {
     name: String,
     extent: usize,
@@ -140,7 +141,19 @@ fn parse_record(record: &[u8], source: NameSource) -> Result<Option<Entry>> {
         is_directory: flags & FLAG_DIRECTORY != 0,
     }))
 }
-fn read_directory(data: &[u8], extent: usize, size: usize, source: NameSource) -> Result<Vec<Entry>> {
+/// Parses one directory extent into entries, enforcing `total_entries`
+/// (shared across the whole tree, including recursive calls for
+/// subdirectories) against `MAX_MEMBERS` as each record is parsed, so a
+/// single oversized extent can't force collection of millions of entries
+/// before the caller gets a chance to reject the result -- the budget check
+/// happens mid-parse, not after the extent is fully collected.
+fn read_directory(
+    data: &[u8],
+    extent: usize,
+    size: usize,
+    source: NameSource,
+    total_entries: &mut usize,
+) -> Result<Vec<Entry>> {
     let bytes = get(data, mul(extent, SECTOR_SIZE)?, size).map_err(|_| {
         "ISO 9660 directory extent exceeds the buffer (bad or damaged volume descriptor)"
     })?;
@@ -158,6 +171,10 @@ fn read_directory(data: &[u8], extent: usize, size: usize, source: NameSource) -
         }
         let record = get(bytes, pos, length)?;
         if let Some(entry) = parse_record(record, source)? {
+            *total_entries += 1;
+            if *total_entries > MAX_MEMBERS {
+                return Err("too many ISO 9660 entries".into());
+            }
             entries.push(entry);
         }
         pos = add(pos, length)?;
@@ -215,16 +232,18 @@ fn open(data: Vec<u8>) -> Result<Box<dyn ArchiveReader>> {
     let mut members = Vec::new();
     let mut pending = vec![(String::new(), root_extent, root_size, 0_u32)];
     let mut visited = HashSet::new();
-    let mut count = 0;
+    let mut total_entries = 0_usize;
     while let Some((path, extent, size, depth)) = pending.pop() {
-        count += 1;
-        if count > MAX_MEMBERS || depth > 256 {
+        if depth > 256 {
             return Err("ISO 9660 traversal limit exceeded".into());
         }
         if !visited.insert(extent) {
             return Err("ISO 9660 directory cycle or repeated directory".into());
         }
-        for entry in read_directory(&data, extent, size, source)?.into_iter().rev() {
+        for entry in read_directory(&data, extent, size, source, &mut total_entries)?
+            .into_iter()
+            .rev()
+        {
             if entry.name.is_empty() || entry.name.contains('/') {
                 return Err("invalid ISO 9660 entry name".into());
             }
@@ -234,9 +253,6 @@ fn open(data: Vec<u8>) -> Result<Box<dyn ArchiveReader>> {
                 format!("{path}/{}", entry.name)
             };
             validate_name(&full)?;
-            if pending.len() + count >= MAX_MEMBERS {
-                return Err("too many ISO 9660 entries".into());
-            }
             if entry.is_directory {
                 pending.push((full, entry.extent, entry.size, depth + 1));
             } else {
@@ -256,7 +272,8 @@ fn open(data: Vec<u8>) -> Result<Box<dyn ArchiveReader>> {
 
 #[cfg(test)]
 mod tests {
-    use crate::archive::Archive;
+    use super::{read_directory, NameSource};
+    use crate::archive::{Archive, MAX_MEMBERS};
     const ISO: &[u8] = include_bytes!("../../../tests/fixtures/iso9660/sample.iso");
     const ROCK_RIDGE_ONLY: &[u8] =
         include_bytes!("../../../tests/fixtures/iso9660_rockridge_only/sample.iso");
@@ -336,5 +353,48 @@ mod tests {
         data[extent_field..extent_field + 4].copy_from_slice(&root_extent.to_le_bytes());
         data[extent_field + 6..extent_field + 10].copy_from_slice(&root_extent.to_be_bytes());
         assert!(Archive::open("iso9660", data).is_err());
+    }
+
+    /// Builds a single 2048-byte directory extent containing two minimal
+    /// (34-byte, no system-use area) plain-file records back to back.
+    fn two_record_extent() -> Vec<u8> {
+        let mut data = vec![0_u8; 2048];
+        for (offset, name) in [(0_usize, b'A'), (34_usize, b'B')] {
+            data[offset] = 34; // record length
+            data[offset + 32] = 1; // name length
+            data[offset + 33] = name;
+        }
+        data
+    }
+
+    #[test]
+    fn directory_entry_budget_is_enforced_mid_parse_not_after_full_collection() {
+        // The MAX_MEMBERS budget is shared across the whole tree and must
+        // be enforced inside read_directory as each record is parsed, not
+        // after the caller gets back a fully-collected Vec -- that's
+        // exactly what let a single crafted directory extent force
+        // allocation of millions of entries before any limit check fired.
+        // Priming the counter to one below the real MAX_MEMBERS constant
+        // lets this test prove the exact production cap fires on the
+        // second record, without needing to build or allocate a
+        // multi-gigabyte crafted extent to reach it for real.
+        let data = two_record_extent();
+        let mut total_entries = MAX_MEMBERS - 1;
+        let err = read_directory(&data, 0, 2048, NameSource::Primary, &mut total_entries)
+            .unwrap_err();
+        assert_eq!(err, "too many ISO 9660 entries");
+    }
+
+    #[test]
+    fn directory_entry_budget_is_shared_across_recursive_calls() {
+        // A running counter threaded through recursive read_directory
+        // calls (one per subdirectory) must accumulate rather than reset,
+        // so the cap applies to the whole tree, not per-directory.
+        let data = two_record_extent();
+        let mut total_entries = 0_usize;
+        read_directory(&data, 0, 34, NameSource::Primary, &mut total_entries).unwrap();
+        assert_eq!(total_entries, 1);
+        read_directory(&data, 0, 2048, NameSource::Primary, &mut total_entries).unwrap();
+        assert_eq!(total_entries, 3);
     }
 }
