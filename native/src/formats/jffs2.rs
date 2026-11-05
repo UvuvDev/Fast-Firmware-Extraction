@@ -17,7 +17,9 @@
 //! when generating fixtures, mirroring how UBIFS here documents LZO/ZSTD as
 //! unsupported). Summary, padding, cleanmarker, xattr, and xref nodes are
 //! skipped; symlinks and device nodes are not exposed as members.
-use crate::archive::{ArchiveReader, LARGE_CONTAINER_MAX_SIZE, MAX_MEMBERS, Result, validate_name};
+use crate::archive::{
+    ArchiveReader, MAX_FILE_SIZE, MAX_INPUT_SIZE, MAX_MEMBERS, Result, validate_name,
+};
 use crate::bytes::{get, le32};
 use crate::registry::{FormatDescriptor, Signature};
 use miniz_oxide::inflate::{
@@ -36,8 +38,12 @@ pub const FORMAT: FormatDescriptor = FormatDescriptor {
     signatures: &[Signature::new(0, b"\x85\x19")],
     probe: Some(probe),
     open,
-    max_input_size: Some(crate::archive::LARGE_CONTAINER_MAX_SIZE),
-    max_file_size: Some(crate::archive::LARGE_CONTAINER_MAX_SIZE),
+    // JFFS2 only targets raw NOR/NAND flash, not multi-GiB container images,
+    // so the crate-wide defaults apply here rather than
+    // LARGE_CONTAINER_MAX_SIZE (which would make the dead-code-inviting
+    // bound below practically unreachable for a 32-bit size field).
+    max_input_size: Some(MAX_INPUT_SIZE),
+    max_file_size: Some(MAX_FILE_SIZE),
 };
 
 const MAGIC: u16 = 0x1985;
@@ -206,7 +212,22 @@ impl Jffs2 {
         if !matches!(compr, COMPR_NONE | COMPR_ZERO | COMPR_COPY | COMPR_ZLIB) {
             return Err("unsupported JFFS2 compression type".into());
         }
-        if size > LARGE_CONTAINER_MAX_SIZE || dsize > LARGE_CONTAINER_MAX_SIZE {
+        // `size` and `dsize` are attacker-controlled 32-bit fields from a
+        // single ~68-byte node; bound them against MAX_FILE_SIZE (not the
+        // unreachable LARGE_CONTAINER_MAX_SIZE constant, which a u32 can
+        // never exceed) so a crafted node can't claim a multi-GB decoded
+        // size or fragment. This can't be bounded against the raw input
+        // length directly: JFFS2 stores fragments zlib-compressed, so a
+        // genuine small image can legitimately decompress to a file many
+        // times its own size (e.g. a few hundred compressed bytes
+        // expanding to several KB) -- MAX_FILE_SIZE is the same ceiling
+        // FORMAT.max_file_size now enforces on the decoded result anyway,
+        // so this just makes that ceiling bound the allocation attempt
+        // too, instead of only rejecting it after the fact.
+        if size > MAX_FILE_SIZE || dsize > MAX_FILE_SIZE {
+            return Err("JFFS2 file exceeds size limit".into());
+        }
+        if add(offset, dsize)? > MAX_FILE_SIZE {
             return Err("JFFS2 file exceeds size limit".into());
         }
         let payload_start = add(pos, 68)?;
@@ -240,8 +261,26 @@ impl Jffs2 {
                 }
                 Ok(payload.to_vec())
             }
-            COMPR_ZERO => Ok(vec![0; fragment.dsize]),
-            COMPR_ZLIB => inflate_zlib(payload, fragment.dsize),
+            COMPR_ZERO => {
+                // A "hole" fragment needs zero real stored bytes, so
+                // without this bound it could claim a disproportionate
+                // allocation from a single tiny node. parse_inode already
+                // enforces this at insertion time; re-checking here is
+                // defense in depth against decode-time allocation.
+                if fragment.dsize > MAX_FILE_SIZE {
+                    return Err("JFFS2 file exceeds size limit".into());
+                }
+                Ok(vec![0; fragment.dsize])
+            }
+            COMPR_ZLIB => {
+                // Re-checked here (on top of parse_inode's check) so the
+                // pre-allocation in inflate_zlib never runs on an
+                // out-of-bounds size even if that invariant ever changes.
+                if fragment.dsize > MAX_FILE_SIZE {
+                    return Err("JFFS2 file exceeds size limit".into());
+                }
+                inflate_zlib(payload, fragment.dsize)
+            }
             _ => Err("unsupported JFFS2 compression type".into()),
         }
     }
@@ -329,7 +368,7 @@ impl ArchiveReader for Jffs2 {
         let mut output = vec![0_u8; inode.size];
         for fragment in fragments {
             let end = add(fragment.offset, fragment.dsize)?;
-            if end > LARGE_CONTAINER_MAX_SIZE {
+            if end > MAX_FILE_SIZE {
                 return Err("JFFS2 fragment exceeds size limit".into());
             }
             if end > output.len() {
@@ -452,6 +491,46 @@ mod tests {
         let node_crc = super::jffs2_crc32(&data[pos..pos + 60]);
         data[pos + 64..pos + 68].copy_from_slice(&node_crc.to_le_bytes());
         assert!(Archive::open("jffs2", data).is_err());
+    }
+
+    #[test]
+    fn rejects_a_crafted_inode_claiming_a_near_u32_max_size() {
+        // `size` is a single ~68-byte node's own 32-bit field; this
+        // ~1.9 KB fixture can't legitimately claim a ~4.3 GB file. Before
+        // the fix this was only checked against the unreachable
+        // LARGE_CONTAINER_MAX_SIZE (16 GiB) constant -- a u32 can never
+        // exceed that -- so it would be accepted and later force a
+        // multi-GB allocation in read(). It must now be rejected here,
+        // during open(), before any such allocation is attempted.
+        let pos = first_inode_offset();
+        let mut data = JFFS2.to_vec();
+        data[pos + 28..pos + 32].copy_from_slice(&u32::MAX.to_le_bytes());
+        let node_crc = super::jffs2_crc32(&data[pos..pos + 60]);
+        data[pos + 64..pos + 68].copy_from_slice(&node_crc.to_le_bytes());
+        match Archive::open("jffs2", data) {
+            Err(err) => assert!(err.contains("size limit"), "unexpected error: {err}"),
+            Ok(_) => panic!("expected an error"),
+        }
+    }
+
+    #[test]
+    fn rejects_a_crafted_fragment_claiming_a_near_u32_max_decoded_size() {
+        // `dsize` is the claimed decoded size of a single compressed
+        // fragment backed by a tiny real (compressed) payload in this
+        // node; it can't legitimately decompress to ~4.3 GB. Before the
+        // fix, decode_fragment's ZLIB arm and inflate_zlib's
+        // pre-allocation (`vec![0; expected + 1]`) would attempt that
+        // allocation before decompression was even tried, from garbage
+        // compressed bytes.
+        let pos = first_inode_offset();
+        let mut data = JFFS2.to_vec();
+        data[pos + 52..pos + 56].copy_from_slice(&u32::MAX.to_le_bytes());
+        let node_crc = super::jffs2_crc32(&data[pos..pos + 60]);
+        data[pos + 64..pos + 68].copy_from_slice(&node_crc.to_le_bytes());
+        match Archive::open("jffs2", data) {
+            Err(err) => assert!(err.contains("size limit"), "unexpected error: {err}"),
+            Ok(_) => panic!("expected an error"),
+        }
     }
 
     fn u16(data: &[u8], offset: usize) -> u16 {
