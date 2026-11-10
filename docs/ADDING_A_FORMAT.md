@@ -27,6 +27,8 @@ pub const FORMAT: FormatDescriptor = FormatDescriptor {
     signatures: &[Signature::new(0, b"MAGC")],
     probe: None,
     open,
+    max_input_size: None,
+    max_file_size: None,
 };
 ```
 
@@ -172,6 +174,5 @@ No central format list or parser-specific dispatch is needed. The registry
 also tests 1,000 embedded descriptors and anchored-wrapper priority.
 
 
-Existing Python implementations under `formats/` remain supported during
-migration and still auto-import. DTBO and SquashFS retain their Python fallback
-when the native library is absent. New unpackers should follow the Rust path.
+Format adapters are generated from the native inventory.
+New unpackers should follow the Rust path without adding a Python parser.

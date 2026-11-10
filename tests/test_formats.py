@@ -56,11 +56,13 @@ def test_format_fixture(fixture_dir: Path) -> None:
     root = session.root_context
 
     if expected.get("expect_failure"):
-        assert root.transform_result == TransformResult.TransformFailure or not root.children, (
-            f"{fixture_dir.name}: expected failure but got children {[c.filename for c in root.children]}"
+        assert root.transform_result == TransformResult.TransformFailure, (
+            f"{fixture_dir.name}: expected parse failure, got {root.transform_result}"
         )
+        assert not root.children
         return
 
+    assert root.transform_result == TransformResult.TransformSuccess
     _check_children(root, expected["children"], fixture_dir.name, expected.get("embedded_range"))
 
 
