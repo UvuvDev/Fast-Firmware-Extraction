@@ -1,0 +1,14 @@
+{
+  "sample": "sample.bin",
+  "native_format": "shannon_toc",
+  "children": {
+    "BOOT": {
+      "length": 60,
+      "sha256": "c19481cc38d8646893fa846662a186246909f3c6bfeebde23eb8a9388aac91ac"
+    },
+    "MAIN": {
+      "length": 721,
+      "sha256": "79ea11842f177cab7f92ad4feb5ee289956b2129054340547a464ae48fb7bcfb"
+    }
+  }
+}

@@ -4,6 +4,14 @@ Tired of spending an hour per firmware image doing endless extraction? Use Binar
 
 ## Supported formats
 
+- **ShannonTOC** — Samsung Shannon Baseband TOC (Rust)
+
+Shannon TOC extraction requires the native build; it has no Python fallback.
+The reader skips zero-offset virtual regions, removes the 528-byte allowance
+from BOOT's exposed payload, and validates the complete stored BOOT region
+before trimming. Load addresses and other metadata do not determine file
+offsets. See [the format notes](docs/SHANNON_TOC.md) for layout and tests.
+
 Formats land one at a time, each as its own PR. Add a new unpacker with
 **one Rust module under `native/src/formats/` plus fixtures**. Build
 discovery, Python registration, and recursive CLI dispatch are automatic.
@@ -19,7 +27,7 @@ Binary Ninja:
 cargo test --locked
 ```
 
-Build the optional native backend for the current platform, then test its
+Build the native backend for the current platform, then test its
 Python bridge against the existing fixture lengths and SHA-256 hashes:
 
 ```sh
@@ -27,14 +35,13 @@ cargo build --release --locked
 python3 -m unittest discover -s native/tests -v
 ```
 
-The ported Binary Ninja transforms use the library in
-`target/release/` after a plugin reload/restart. Python fallback readers remain
-available without the library; Rust-only formats require the native build. A present but incompatible library or
-a Rust parse error is reported as a failure. Use the default Cargo target
-directory when building for the plugin. Parsing/extraction runs in Rust;
-Python adapts Container Browser's discovery and file-selection protocol.
-Legacy Python readers remain as fallbacks and parity references where a
-format has one.
+The Binary Ninja transforms use the library in `target/release/` after a
+plugin reload/restart. The native build is required for the supported formats.
+An incompatible library or a Rust parse error is reported as a failure.
+Use the default Cargo target directory when building for the plugin.
+Rust parses containers and extracts their contents. Python registers the
+formats with Binary Ninja, lists their members in Container Browser, and
+handles file selections.
 
 Embedded signature detection (bounded, indexed) shares `aho-corasick`
 crate-wide; it's the one dependency every build needs regardless of which
